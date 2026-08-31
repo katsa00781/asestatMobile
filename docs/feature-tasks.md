@@ -145,7 +145,11 @@ számokkal hívja meg (TS%, eFG%, valuation).
 `npx expo export` iOS-re és Androidra lefut; a kiexportált iOS bundle-ben
 ellenőrizve, hogy a `trueShootingPct`, `simpleValuation`, `getSeasonStatsTable`
 és `fetchAllRows` benne van – tehát a `@core` alias Metro alatt is felold.
-Szimulátoros futtatás még nem volt.
+**Futtatva iPhone 17 Pro (iOS 26.5) szimulátoron Expo Go alatt:** a képernyő
+renderel, mind a 15 modul betöltődik és kiírja a saját export-számát
+(stat-formulas 4, player-analysis 14, …), a három képlet valós eredményt ad
+(TS 66.1%, eFG 67.9%, VAL 25). A 3 betűcsalád, a sötét paletta, a 14px
+card radius és a safe area inset is helyesen jelenik meg.
 
 **Nyitva maradt:** Az `app/index.tsx` ideiglenes – az S3 auth része után a
 `(tabs)` váltja fel. A `sync-core.ts` a Node natív TS-futtatásával megy
@@ -177,11 +181,12 @@ dolgozni.
 `npx expo export` iOS-re és Androidra egyaránt lefut. A kiexportált iOS
 bundle-ben ellenőrizve, hogy a NativeWind a theme tokenjeit fordítja le
 (`#0A1628`, `#050B14`, `fontSize:28`, `borderRadius:14`) és hogy mind a
-7 betűfájl neve bekerül. Szimulátoros vizuális ellenőrzés még nem volt.
+7 betűfájl neve bekerül. Vizuálisan ellenőrizve iPhone 17 Pro (iOS 26.5)
+szimulátoron, Expo Go alatt.
 
-**Nyitva maradt:** Vizuális ellenőrzés iOS szimulátoron. Androidra nincs
-telepített SDK/emulátor ezen a gépen – az Android oldal egyelőre csak
-bundle-szinten igazolt.
+**Nyitva maradt:** Androidra nincs telepített SDK/emulátor ezen a gépen –
+az Android oldal egyelőre csak bundle-szinten igazolt. Az első Android
+vizuális ellenőrzés az auth képernyőnél esedékes.
 
 **Commit:** `setup: Expo Router, NativeWind és design tokenek`
 
