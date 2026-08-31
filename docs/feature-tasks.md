@@ -46,7 +46,7 @@
 
 ## S4 – Adatréteg
 
-- [ ] `store/filterStore.ts` – `selectedSeasonId`, `selectedTeamId`, AsyncStorage perzisztálás, `hydrated` flag
+- [x] `store/filterStore.ts` – `selectedSeasonId`, `selectedTeamId`, AsyncStorage perzisztálás, `hydrated` flag
 - [ ] `hooks/useFilterData.ts` – `seasons` + `teams` betöltés, alapértelmezett szezon az `is_current`-ből
 - [ ] `components/FilterSheet.tsx` – szezon/csapat választó bottom sheet a mockup szerint; Android hardveres back kezelése
 - [ ] `hooks/useGameData.ts` – meccsek + fixtures lekérése, `@core/season-tables` + `@core/fetch-all-rows` használatával
@@ -129,6 +129,45 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-08-31 – Szűrő store (`filterStore`)
+
+**Mit:** Elkészült a `store/filterStore.ts`: `selectedSeasonId`, `selectedTeamId`,
+`hydrated`, plusz `setSeason` / `setTeam`. A perzisztálást a Zustand `persist`
+middleware-e végzi AsyncStorage-on, `asestats.filter` kulcs alatt (lásd D-012).
+A store **csak azonosítót tárol**, nevet nem – egy eltárolt név elavulna, ha a
+szezont vagy a csapatot átnevezik; a nevek a következő feladat
+`useFilterData` hookjából jönnek. A `hydrated` a `partialize` miatt nem kerül a
+tárolóba, és sérült tároló-bejegyzés esetén is `true` lesz, hogy az app ne
+fagyjon ki.
+
+**Fájlok:** `store/filterStore.ts`
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan. A perzisztálást
+Node alatt, memóriában élő AsyncStorage-dublőrrel futtatva végigmértem a store
+tényleges forrásán, 4 esetre: (1) üres tárolóval indulva `null`/`null` és
+`hydrated: true`; (2) választás után a tárolt nyers érték pontosan
+`{"state":{"selectedSeasonId":"season-2025","selectedTeamId":"team-ase"},"version":0}`
+– a `hydrated` tehát valóban kimarad; (3) friss store-példány ugyanabból a
+tárolóból visszaolvassa a választást; (4) szándékosan sérült JSON-ra figyelmeztet,
+alapértelmezésre esik vissza, és `hydrated: true` marad.
+A Metro-oldali feloldást úgy igazoltam, hogy ideiglenesen beimportáltam a store-t
+az `app/index.tsx`-be, lefuttattam az `npx expo export`-ot iOS-re és Androidra,
+és **mindkét** bundle-ben megtaláltam a store-t és a persist middleware-t
+(`asestats.filter`, `onRehydrateStorage`, `selectedSeasonId`) – a
+`zustand/middleware` alfüggvény tehát Metro alatt is felold. Az ideiglenes
+importot utána visszavontam.
+
+**Nyitva maradt:** A store-nak még nincs valódi fogyasztója, ezért szimulátoron
+nem futott – az első vizuális ellenőrzése a `FilterSheet` feladatnál lesz.
+A tárolt azonosító **érvényességét senki nem ellenőrzi**: ha egy szezont vagy
+csapatot törölnek, a perzisztált id-re nem jön adat. Ezt szándékosan a
+`useFilterData` hookra hagytam (következő feladat), mert csak ott van meg a
+választható lista, amihez hasonlítani lehet.
+
+**Commit:** `feat: szűrő store szezon- és csapatválasztással`
+
+---
 
 ## 2026-08-31 – Bejelentkezés ellenőrzése valós felhasználóval (iOS)
 
@@ -462,5 +501,24 @@ típus-augmentációt igényelne, amit a `CLAUDE.md` tilt. Vagy `className`-nel 
 az `active:` variánssal – az viszont csak a Tailwind-tokenekre képes, a futásidőben
 számított stílusokra (pl. letiltott gomb opacitása) nem.
 **Visszavonható?** Igen, de a teljes komponenskönyvtárat érinti.
+
+## D-012 – A szűrő perzisztálását a Zustand `persist` middleware végzi, nem kézi AsyncStorage
+**Dátum:** 2026-08-31
+**Döntés:** A `filterStore` a `zustand/middleware` `persist`-jét használja
+`createJSONStorage(() => AsyncStorage)`-dzsel, és a `hydrated` flaget az
+`onRehydrateStorage` visszahívása állítja be.
+**Miért:** A `persist` a zustand része, tehát **nem új dependency**. A kézi
+megoldás ugyanezt a három dolgot (induló beolvasás, minden változásnál kiírás,
+`hydrated` jelzés) kb. kétszer annyi kódból adná, és a kiírás elfelejtése néma
+adatvesztés lenne. Az `authStore` azért nem így néz ki, mert ott a perzisztálást
+a Supabase kliens végzi – ott nincs mit menteni, csak tükrözni.
+A `partialize` azért kell, hogy a futásidejű `hydrated` ne kerüljön a tárolóba:
+enélkül egy régi `hydrated: true` visszaolvasva elfedné, hogy a beolvasás még
+tart. Az `onRehydrateStorage` hiba ágán is `true`-ra állítunk, mert egy sérült
+AsyncStorage bejegyzés különben véglegesen a betöltő képernyőn ragasztaná az appot.
+**Alternatíva:** Kézi `AsyncStorage.getItem`/`setItem` az `initAuth()` mintájára –
+konzisztensebb lenne az `authStore`-ral, de több kód és több hibalehetőség.
+Vagy `expo-secure-store` – a szűrő nem titok, felesleges.
+**Visszavonható?** Igen, egy fájl.
 
 <!-- ÚJ DÖNTÉSEK IDE, ALULRA, NÖVEKVŐ SORSZÁMMAL -->
