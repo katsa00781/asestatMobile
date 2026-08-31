@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="4686a8b5-f312-4e88-aef3-b19fc17e0968"></script>
+
+</head>
+<body>
+<x-dc>
+<!-- helmet (Google Fonts) kihagyva -->
+<div style="display:flex;justify-content:center;padding:40px 20px;background:#0a0a0a;min-height:100vh;box-sizing:border-box">
+<x-import component-from-global-scope="IOSDevice" from="f4355da0-229e-457a-b60b-e8e280f89c25#/ios-frame.jsx" width="{{ 390 }}" height="{{ 844 }}" dark="{{ true }}" hint-size="390px,844px">
+  <div style="width:390px;height:844px;position:relative;overflow:hidden;background:#050B14;background-image:radial-gradient(circle at 1px 1px, rgba(0,212,255,0.045) 1px, transparent 0);background-size:24px 24px;font-family:'DM Sans',sans-serif;color:#E8F4FF;box-sizing:border-box">
+
+    <div style="position:absolute;top:0;left:0;right:0;bottom:83px;overflow:hidden">
+      <div style="padding-top:54px"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;height:44px;padding:0 16px;box-sizing:border-box">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px">ASE</div>
+        <div style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;background:#0F1F3D;border:1px solid #1E3A5F;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:13px;color:#E8F4FF;white-space:nowrap;flex-shrink:0">
+          <span style="white-space:nowrap">{{ selectedSeason }} · {{ selectedTeam }}</span><span style="color:#7A9ABB;font-size:10px;flex-shrink:0">▾</span>
+        </div>
+        <svg width="22" height="22" sc-camel-view-box="0 0 24 24" fill="none" stroke="#4A6D95" stroke-width="1.6">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M12 2v3M12 19v3M22 12h-3M5 12H2M19.07 4.93l-2.12 2.12M7.05 16.95l-2.12 2.12M19.07 19.07l-2.12-2.12M7.05 7.05L4.93 4.93"></path>
+        </svg>
+      </div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:28px;padding:16px 16px 16px">MA</div>
+      <div style="position:relative;margin:0 16px 20px;background:#0A1628;border-radius:14px;padding:16px 16px 16px 19px;box-sizing:border-box;box-shadow:0 0 24px rgba(255,107,53,0.08)">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#FF6B35;border-radius:14px 0 0 14px;box-shadow:0 0 14px rgba(255,107,53,0.5)"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#4A6D95">Következő meccs</span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;padding:3px 8px;border-radius:2px;background:rgba(0,212,255,0.14);border:1px solid rgba(0,212,255,0.3);color:#00D4FF">Hazai</span>
+        </div>
+        <div style="display:flex;align-items:baseline;justify-content:center;gap:12px;margin-bottom:10px">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:22px">ASE</span>
+          <span style="font-family:'DM Sans',sans-serif;font-size:12px;color:#4A6D95">VS</span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:22px;text-align:center">Falco-Vulcano Szombathely</span>
+        </div>
+        <div style="text-align:center;font-family:'DM Sans',sans-serif;font-size:13px;color:#7A9ABB;margin-bottom:16px">2026. szeptember 6. · szombat 18:00 · Paks, Városi Sportcsarnok</div>
+        <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-weight:600;font-size:20px;color:#00D4FF;letter-spacing:0.02em">7 NAP 04:12</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 16px 20px">
+        <div style="position:relative;min-height:96px;background:#0A1628;border-radius:14px;padding:14px 14px 14px 17px;box-sizing:border-box">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#00D4FF;border-radius:14px 0 0 14px;box-shadow:0 0 12px rgba(0,212,255,0.45)"></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#7A9ABB">Pontátlag</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#10D98A">▲ 3.1</span>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-weight:600;font-size:28px;margin-top:8px;letter-spacing:-0.03em">82.4</div>
+        </div>
+        <div style="position:relative;min-height:96px;background:#0A1628;border-radius:14px;padding:14px 14px 14px 17px;box-sizing:border-box">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#FF6B35;border-radius:14px 0 0 14px;box-shadow:0 0 12px rgba(255,107,53,0.45)"></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#7A9ABB">Kapott pont</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#10D98A">▼ 2.4</span>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-weight:600;font-size:28px;margin-top:8px;letter-spacing:-0.03em">76.8</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="position:absolute;left:0;right:0;bottom:0;height:83px;background:#0A1628;border-top:1px solid #1E3A5F;display:flex;box-sizing:border-box;padding-bottom:20px">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;position:relative">
+        <div style="position:absolute;top:0;width:24px;height:3px;border-radius:2px;background:#00D4FF"></div>
+        <svg width="24" height="24" sc-camel-view-box="0 0 24 24" fill="none" stroke="#00D4FF" stroke-width="1.6">
+          <path d="M4 11.5 12 4l8 7.5"></path>
+          <path d="M6 10v9h12v-9"></path>
+        </svg>
+        <span style="font-family:'DM Sans',sans-serif;font-size:11px;color:#00D4FF">Ma</span>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+        <svg width="24" height="24" sc-camel-view-box="0 0 24 24" fill="none" stroke="#4A6D95" stroke-width="1.6">
+          <circle cx="12" cy="8" r="3.2"></circle>
+          <path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"></path>
+        </svg>
+        <span style="font-family:'DM Sans',sans-serif;font-size:11px;color:#4A6D95">Játékosok</span>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+        <svg width="24" height="24" sc-camel-view-box="0 0 24 24" fill="none" stroke="#4A6D95" stroke-width="1.6">
+          <rect x="4" y="5" width="16" height="15" rx="2"></rect>
+          <path d="M4 10h16M8 3v4M16 3v4"></path>
+        </svg>
+        <span style="font-family:'DM Sans',sans-serif;font-size:11px;color:#4A6D95">Meccsek</span>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+        <svg width="24" height="24" sc-camel-view-box="0 0 24 24" fill="none" stroke="#4A6D95" stroke-width="1.6">
+          <rect x="3.5" y="4.5" width="17" height="15" rx="1.5"></rect>
+          <path d="M3.5 9.5h17M3.5 14.5h17M9.5 4.5v15"></path>
+        </svg>
+        <span style="font-family:'DM Sans',sans-serif;font-size:11px;color:#4A6D95">Tabella</span>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+        <svg width="24" height="24" sc-camel-view-box="0 0 24 24" fill="none" stroke="#4A6D95" stroke-width="1.6">
+          <path d="M12 3l1.8 5.6L19 10l-5.2 1.4L12 17l-1.8-5.6L5 10l5.2-1.4z"></path>
+        </svg>
+        <span style="font-family:'DM Sans',sans-serif;font-size:11px;color:#4A6D95">Elemzés</span>
+      </div>
+    </div>
+
+    <div style="position:absolute;inset:0;background:rgba(2,6,14,0.6);z-index:10"></div>
+
+    <div style="position:absolute;left:0;right:0;bottom:0;height:508px;background:#0F1F3D;border-radius:14px 14px 0 0;border-top:1px solid #00D4FF;box-shadow:0 -12px 40px rgba(0,0,0,0.5);z-index:20;display:flex;flex-direction:column;box-sizing:border-box;padding:10px 0 0">
+
+      <div style="width:36px;height:4px;border-radius:2px;background:#2A4468;margin:0 auto 14px"></div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:0 16px 16px;border-bottom:1px solid #1E3A5F">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#4A6D95">Szűrő</span>
+        <span style="font-family:'DM Sans',sans-serif;font-size:15px;color:#00D4FF">Kész</span>
+      </div>
+
+      <div style="padding:16px 16px 0">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#7A9ABB;margin-bottom:4px">Szezon</div>
+        <sc-for list="{{ seasons }}" as="s" hint-placeholder-count="4">
+          <div sc-camel-on-click="{{ s.select }}" style="position:relative;display:flex;align-items:center;justify-content:space-between;height:48px;padding:0 12px 0 16px;box-sizing:border-box;border-bottom:1px solid #16233d;cursor:pointer;background:{{ s.bg }}">
+            <sc-if value="{{ s.active }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;left:0;top:6px;bottom:6px;width:2px;background:#00D4FF;border-radius:0 2px 2px 0"></div>
+            </sc-if>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:15px;color:{{ s.color }}">{{ s.label }}</span>
+            <sc-if value="{{ s.active }}" hint-placeholder-val="{{ false }}">
+              <svg width="16" height="16" sc-camel-view-box="0 0 24 24" fill="none" stroke="#00D4FF" stroke-width="2.2">
+                <path d="M4 12.5 9.5 18 20 6"></path>
+              </svg>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="height:1px;margin:18px 16px;background:linear-gradient(90deg,transparent,#1E3A5F,transparent)"></div>
+
+      <div style="padding:0 16px">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#7A9ABB;margin-bottom:4px">Csapat</div>
+        <sc-for list="{{ teams }}" as="t" hint-placeholder-count="3">
+          <div sc-camel-on-click="{{ t.select }}" style="position:relative;display:flex;align-items:center;justify-content:space-between;height:48px;padding:0 12px 0 16px;box-sizing:border-box;border-bottom:1px solid #16233d;cursor:pointer;background:{{ t.bg }}">
+            <sc-if value="{{ t.active }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;left:0;top:6px;bottom:6px;width:2px;background:#00D4FF;border-radius:0 2px 2px 0"></div>
+            </sc-if>
+            <span style="font-family:'DM Sans',sans-serif;font-weight:600;font-size:15px;color:{{ t.color }}">{{ t.label }}</span>
+            <sc-if value="{{ t.active }}" hint-placeholder-val="{{ false }}">
+              <svg width="16" height="16" sc-camel-view-box="0 0 24 24" fill="none" stroke="#00D4FF" stroke-width="2.2">
+                <path d="M4 12.5 9.5 18 20 6"></path>
+              </svg>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="flex:1"></div>
+      <div style="text-align:center;font-family:'DM Sans',sans-serif;font-size:13px;color:#4A6D95;padding:16px 24px 12px">A választás megjegyződik a következő indításig.</div>
+      <div style="height:34px;display:flex;align-items:center;justify-content:center">
+        <div style="width:134px;height:5px;border-radius:3px;background:#3A5478"></div>
+      </div>
+
+    </div>
+
+  </div>
+</x-import>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script="">
+class Component extends DCLogic {
+  state = { season: '2025/2026', team: 'ASE' };
+
+  renderVals() {
+    const seasonList = ['2026/2027', '2025/2026', '2024/2025', '2023/2024'];
+    const teamList = ['ASE', 'ASE U20', 'ASE Akadémia'];
+    const mk = (label, activeVal, onPick) => {
+      const active = label === activeVal;
+      return {
+        label,
+        active,
+        bg: active ? '#162440' : 'transparent',
+        color: active ? '#00D4FF' : '#E8F4FF',
+        select: () => onPick(label)
+      };
+    };
+    return {
+      selectedSeason: this.state.season,
+      selectedTeam: this.state.team,
+      seasons: seasonList.map(l => mk(l, this.state.season, v => this.setState({ season: v }))),
+      teams: teamList.map(l => mk(l, this.state.team, v => this.setState({ team: v })))
+    };
+  }
+}
+</script>
+
+
+</body></html>

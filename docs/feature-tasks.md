@@ -12,17 +12,17 @@
 
 ## S3 – Setup (egyszeri)
 
-- [ ] Expo projekt létrehozása a repo gyökerében (`npx create-expo-app . --template blank-typescript`)
-- [ ] Git init, `.gitignore` (node_modules, .expo, .env, ios/, android/), első commit: `setup: Expo projekt inicializálás`
-- [ ] A meglévő 5 mockup HTML áthelyezése `docs/mockups/` alá (ne a repo gyökerében maradjanak)
-- [ ] `.env` és `.env.example` létrehozása (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`)
-- [ ] Expo Router bekötése (`expo-router`, entry point, `app/_layout.tsx`)
-- [ ] NativeWind v4 telepítése és konfigurálása (`tailwind.config.js`, `babel.config.js`, `global.css`, `metro.config.js`)
-- [ ] `constants/theme.ts` – a `CLAUDE.md` tokentáblájának 1:1 leképezése TS-be; a `tailwind.config.js` ebből olvas
-- [ ] `expo-font`: Barlow Condensed, DM Sans, JetBrains Mono elhelyezése `assets/fonts/`-ba + betöltés a gyökér layoutban
-- [ ] `constants/images.ts` létrehozása (ASE logó, empty state illusztrációk helye)
-- [ ] Lint + typecheck script bekötése (`npm run lint`, `npx tsc --noEmit`)
-- [ ] TypeScript strict mode + path aliasok (`@/*`, `@core/*`) `tsconfig.json` + `babel-plugin-module-resolver`
+- [x] Expo projekt létrehozása a repo gyökerében (`npx create-expo-app . --template blank-typescript`)
+- [x] Git init, `.gitignore` (node_modules, .expo, .env, ios/, android/), első commit: `setup: Expo projekt inicializálás`
+- [x] A meglévő 5 mockup HTML áthelyezése `docs/mockups/` alá (ne a repo gyökerében maradjanak)
+- [x] `.env` és `.env.example` létrehozása (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`)
+- [x] Expo Router bekötése (`expo-router`, entry point, `app/_layout.tsx`)
+- [x] NativeWind v4 telepítése és konfigurálása (`tailwind.config.js`, `babel.config.js`, `global.css`, `metro.config.js`)
+- [x] `constants/theme.ts` – a `CLAUDE.md` tokentáblájának 1:1 leképezése TS-be; a `tailwind.config.js` ebből olvas
+- [x] `expo-font`: Barlow Condensed, DM Sans, JetBrains Mono elhelyezése `assets/fonts/`-ba + betöltés a gyökér layoutban
+- [x] `constants/images.ts` létrehozása (ASE logó, empty state illusztrációk helye)
+- [x] Lint + typecheck script bekötése (`npm run lint`, `npx tsc --noEmit`)
+- [x] TypeScript strict mode + path aliasok (`@/*`, `@core/*`) `tsconfig.json` + `babel-plugin-module-resolver`
 
 ### `@core` mag bekötése
 
@@ -128,6 +128,38 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-08-31 – S3 Expo váz: Router, NativeWind, design tokenek, fontok
+
+**Mit:** Az Expo SDK 57 váz feláll és bundle-ölhető. Expo Router (fájl-alapú
+navigáció, `expo-router/entry` belépési pont), NativeWind v4 + Tailwind 3 a
+`constants/theme.ts`-ből olvasó `tailwind.config.ts`-szel, 7 statikus TTF a
+3 betűcsaládból `assets/fonts/`-ban, `expo-font` betöltés a gyökér layoutban
+splash-kezeléssel. `@/*` és `@core/*` alias tsconfig-ban és
+`babel-plugin-module-resolver`-ben. A tokenek a mockupokból ellenőrizve
+(lásd D-008). A mockup HTML-ek olvasható markupja kicsomagolva
+`docs/mockups/extracted/` alá – a bundle-ölt 1,2 MB-os fájlokból nem lehetett
+dolgozni.
+
+**Fájlok:** `app/_layout.tsx`, `constants/theme.ts`, `constants/fonts.ts`,
+`constants/images.ts`, `tailwind.config.ts`, `babel.config.js`,
+`metro.config.js`, `global.css`, `nativewind-env.d.ts`, `types/globals.d.ts`,
+`tsconfig.json`, `app.json`, `eslint.config.js`, `package.json`,
+`assets/fonts/*.ttf`, `docs/mockups/extracted/*.html`
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan.
+`npx expo export` iOS-re és Androidra egyaránt lefut. A kiexportált iOS
+bundle-ben ellenőrizve, hogy a NativeWind a theme tokenjeit fordítja le
+(`#0A1628`, `#050B14`, `fontSize:28`, `borderRadius:14`) és hogy mind a
+7 betűfájl neve bekerül. Szimulátoros vizuális ellenőrzés még nem volt.
+
+**Nyitva maradt:** Vizuális ellenőrzés iOS szimulátoron. Androidra nincs
+telepített SDK/emulátor ezen a gépen – az Android oldal egyelőre csak
+bundle-szinten igazolt.
+
+**Commit:** `setup: Expo Router, NativeWind és design tokenek`
+
+---
 
 ## 2026-08-31 – Projekt-előkészítés (S2 lezárás)
 
@@ -246,5 +278,51 @@ Clerk bevezetése kettős identitásréteget és felhasználó-szinkronizálást
 egyetlen előny nélkül.
 **Alternatíva:** Clerk – jobb beépített UI, de itt idegen test.
 **Visszavonható?** Nem érdemben – az egész RLS-modell erre épül.
+
+## D-008 – A mockup a mérvadó a típusskálára és a radiusra
+**Dátum:** 2026-08-31
+**Döntés:** A `constants/theme.ts` a mockupok tényleges értékeit kódolja, nem a
+`CLAUDE.md` rövidített tokentábláját. Típusskála: 9/10/11/12/13/14/15/17/20/22/24/
+28/32/34/40. Radius: 2 (badge), 3 (progress), 4 (input), 6 (gomb/tab), 10 (listasor),
+14 (StatTile/sheet). A Tailwind `spacing` kulcsai maguk a px értékek (`p-14` → 14px),
+mert a mockupok px-ben készültek és több padding (14, 17, 10, 3) nincs rajta a 4pt
+rácson.
+**Miért:** A `CLAUDE.md` szerint a designt pontosan replikálni kell, a mockupok pedig
+elfogadottak. A CLAUDE.md 8 elemű skálája a mockup értékeinek részhalmaza – a hiányzó
+28-as StatTile érték és a 40-es meccseredmény kerekítése látható vizuális eltérést
+okozna. A színpaletta ellenőrizve: a mockupok pontosan a tokentábla 16 színét
+használják, plusz 5 egyszeri árnyalatot (`#C4B5FD` AI badge felirat, `#0096B8`
+gradiens vég, `#0F2040`/`#16233D`/`#101E33` finom felületek) – ezek `colors.shade`
+és `colors.text.ai` néven kerültek be.
+**Alternatíva:** A CLAUDE.md skálájához ragaszkodni és kerekíteni (a felhasználó
+elvetette), vagy képernyőnként rákérdezni minden hiányzó értékre (lassú).
+**Visszavonható?** Igen, egy fájl.
+
+## D-009 – A sync script írja át a `@/lib/` importokat, nem kézi patch
+**Dátum:** 2026-08-31
+**Döntés:** A `scripts/sync-core.ts` a másolás közben a `@/lib/<modul>` importokat
+`./<modul>`-ra írja át (3 helyen: `dashboard-types`, `player-stat-mapping`).
+Ha nem szinkronizált modulra mutatna, figyelmeztet és nem ír át.
+**Miért:** A webprojektben a `@/` a repo gyökere, ahol a `lib/` a mag helye. A mobilban
+a `@/` szintén a gyökér, de ott saját `lib/` mappánk van (Supabase kliens, format
+helper) – a `@/lib/stat-formulas` tehát a mobilban rossz helyre mutatna. Az átírás a
+generátorban történik, így a `core/` továbbra sincs kézzel szerkesztve, és a következő
+szinkron újratermeli.
+**Alternatíva:** `@/lib/*` aliast a `core/`-ra irányítani – ütközne a saját `lib/`
+mappánkkal. Vagy a webprojektben relatívra cserélni az importokat – idegen projektet
+módosítana egy mobil-specifikus okból.
+**Visszavonható?** Igen.
+
+## D-010 – `babel-preset-expo` explicit devDependency
+**Dátum:** 2026-08-31
+**Döntés:** A `babel-preset-expo@57.0.9` felkerült devDependency-nek.
+**Miért:** Az SDK 57-ben a preset az `expo` csomag alá van beágyazva
+(`node_modules/expo/node_modules/`), így a saját `babel.config.js`-ünkből névre
+hivatkozva nem oldódik fel – a Metro `Cannot find module 'babel-preset-expo'`
+hibával elhasal. Saját babel config viszont kell a NativeWind `jsxImportSource`-hoz
+és a `module-resolver` aliasokhoz. A verzió a beágyazottal egyezik.
+**Alternatíva:** `require.resolve` az `expo` csomagon keresztül – törékeny és
+olvashatatlan. Vagy nem írni saját babel configot – akkor nincs `@core` alias.
+**Visszavonható?** Igen, de a Metro nem fordulna nélküle.
 
 <!-- ÚJ DÖNTÉSEK IDE, ALULRA, NÖVEKVŐ SORSZÁMMAL -->
