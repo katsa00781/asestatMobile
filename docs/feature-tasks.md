@@ -38,7 +38,8 @@
 - [x] `store/authStore.ts` – session tükrözés, `onAuthStateChange` feliratkozás
 - [x] `app/login.tsx` – bejelentkezési képernyő a Dark Command Center stílusban
 - [x] `app/_layout.tsx` auth guard: nincs session → login, van → `(tabs)`
-- [ ] Teszt: bejelentkezés valós Supabase felhasználóval iOS szimulátoron és Android emulátoron
+- [x] Teszt: bejelentkezés valós Supabase felhasználóval **iOS szimulátoron**
+- [ ] Teszt: bejelentkezés valós Supabase felhasználóval **Android emulátoron** (nincs telepítve ezen a gépen)
 - [ ] Push GitHub-ra (kérésre)
 
 ---
@@ -128,6 +129,29 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-08-31 – Bejelentkezés ellenőrzése valós felhasználóval (iOS)
+
+**Mit:** Nem kód, hanem a nyitva maradt ellenőrzés lezárása. A bejelentkezés valós
+Supabase felhasználóval **sikeres** iPhone 17 Pro (iOS 26.5) szimulátoron, Expo Go
+alatt – ezzel az S3 auth blokkjának teljes köre igazolt: kliens → store →
+`signInWithPassword` → `onAuthStateChange` → auth guard átirányítás. Ez felülírja az
+alatta lévő bejegyzés „a sikeres bejelentkezés útvonala még nem futott le" pontját.
+
+**Fájlok:** `docs/feature-tasks.md` (a tesztsor iOS/Android bontásban)
+
+**Tesztelve:** iPhone 17 Pro (iOS 26.5) szimulátor, Expo Go – a felhasználó
+kattintotta végig, mert a szimulátort programból nem tudom vezérelni
+(nincs Accessibility jog a terminálnak).
+
+**Nyitva maradt:** Android emulátor nincs telepítve ezen a gépen, ezért az
+Android oldal továbbra is csak bundle-szinten igazolt – külön sorként nyitva a
+feladatlistán. A kijelentkezés köre nincs külön visszaigazolva. A GitHub push
+kérésre vár.
+
+**Commit:** `docs: bejelentkezés iOS ellenőrzésének átvezetése`
+
+---
 
 ## 2026-08-31 – Bejelentkezési képernyő és auth guard
 
