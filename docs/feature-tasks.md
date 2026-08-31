@@ -33,9 +33,9 @@
 
 ### Supabase és auth
 
-- [ ] `react-native-url-polyfill` + `@react-native-async-storage/async-storage` telepítése
-- [ ] `lib/supabase.ts` – RN kliens AsyncStorage adapterrel, `autoRefreshToken`, `detectSessionInUrl: false`
-- [ ] `store/authStore.ts` – session tükrözés, `onAuthStateChange` feliratkozás
+- [x] `react-native-url-polyfill` + `@react-native-async-storage/async-storage` telepítése
+- [x] `lib/supabase.ts` – RN kliens AsyncStorage adapterrel, `autoRefreshToken`, `detectSessionInUrl: false`
+- [x] `store/authStore.ts` – session tükrözés, `onAuthStateChange` feliratkozás
 - [ ] `app/login.tsx` – bejelentkezési képernyő a Dark Command Center stílusban
 - [ ] `app/_layout.tsx` auth guard: nincs session → login, van → `(tabs)`
 - [ ] Teszt: bejelentkezés valós Supabase felhasználóval iOS szimulátoron és Android emulátoron
@@ -128,6 +128,32 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-08-31 – Supabase kliens és auth store
+
+**Mit:** Felállt az adat- és auth-réteg alapja. A `lib/supabase.ts` az app egyetlen
+Supabase kliense: AsyncStorage adapter, `autoRefreshToken`, `persistSession`,
+`detectSessionInUrl: false`, és induláskor beszédes hibát dob, ha az
+`EXPO_PUBLIC_*` változók hiányoznak. A `store/authStore.ts` Zustandban tükrözi a
+sessiont (`session`, `user`, `hydrated`), az `initAuth()` elvégzi a
+`getSession()` + `onAuthStateChange` feliratkozást, és az `AppState`-hez köti a
+token-auto-frissítést (előtérben `startAutoRefresh`, háttérben `stopAutoRefresh`).
+A Supabase angol auth-hibakódjait magyar üzenetre képezi le.
+
+**Fájlok:** `lib/supabase.ts`, `store/authStore.ts`
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan. A Supabase projekt
+elérhetőségét ellenőriztem: `/auth/v1/health` HTTP 200. A hibaleképezést a
+telepített `@supabase/supabase-js`-szel futtatva ellenőriztem: rossz
+belépőadatra `error.code === 'invalid_credentials'`, amit a store a
+„Hibás email cím vagy jelszó." üzenetre fordít.
+
+**Nyitva maradt:** A sikeres bejelentkezés útvonala még nem futott le éles
+felhasználóval – ehhez teszt-fiók kell.
+
+**Commit:** `setup: Supabase kliens és auth store`
+
+---
 
 ## 2026-08-31 – @core mag bekötése és füstteszt
 
