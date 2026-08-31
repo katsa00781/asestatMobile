@@ -36,8 +36,8 @@
 - [x] `react-native-url-polyfill` + `@react-native-async-storage/async-storage` telepítése
 - [x] `lib/supabase.ts` – RN kliens AsyncStorage adapterrel, `autoRefreshToken`, `detectSessionInUrl: false`
 - [x] `store/authStore.ts` – session tükrözés, `onAuthStateChange` feliratkozás
-- [ ] `app/login.tsx` – bejelentkezési képernyő a Dark Command Center stílusban
-- [ ] `app/_layout.tsx` auth guard: nincs session → login, van → `(tabs)`
+- [x] `app/login.tsx` – bejelentkezési képernyő a Dark Command Center stílusban
+- [x] `app/_layout.tsx` auth guard: nincs session → login, van → `(tabs)`
 - [ ] Teszt: bejelentkezés valós Supabase felhasználóval iOS szimulátoron és Android emulátoron
 - [ ] Push GitHub-ra (kérésre)
 
@@ -128,6 +128,43 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-08-31 – Bejelentkezési képernyő és auth guard
+
+**Mit:** Elkészült az `app/login.tsx` a Dark Command Center nyelven (ASE STATS
+wordmark, ALL CAPS Barlow Condensed labelek, 44pt magas surface1 inputok
+`border.subtle` kerettel, jelszó-láthatóság kapcsoló az input jobb szélén,
+cián elsődleges gomb, negatív glow-s hibapanel). A `app/_layout.tsx` gyökér
+layout `initAuth()`-tal indul, a splash addig áll, amíg a fontok be nem
+töltenek **és** a tárolt session vissza nem olvasódik – így nem villan fel a
+rossz képernyő. A `RootNavigator` végzi az átirányítást: nincs session → `/login`,
+van session a login képernyőn → `/`. Az ideiglenes füstteszt képernyő kapott egy
+kijelentkezés gombot, hogy a kör oda-vissza tesztelhető legyen.
+
+A `Pressable` lenyomott állapotára közös `hooks/usePressed.ts` készült – az okát
+lásd D-011.
+
+**Fájlok:** `app/login.tsx`, `app/_layout.tsx`, `app/index.tsx`,
+`hooks/usePressed.ts`
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan.
+`npx expo export` iOS-re és Androidra egyaránt lefut.
+**Futtatva iPhone 17 Pro (iOS 26.5) szimulátoron Expo Go alatt:** session
+nélkül indulva az auth guard a login képernyőre irányít, a képernyő helyesen
+renderel (a szem-ikon az input jobb szélén ül, a gomb üres űrlapnál 45%-os
+opacitással letiltott), Metro konzolon nincs hiba.
+
+**Nyitva maradt:** A **sikeres bejelentkezés** és a rá következő átirányítás még
+nem futott le valós felhasználóval – nincs hozzá teszt-fiók, a szimulátort pedig
+nem tudom kattintással vezérelni (nincs Accessibility jog). Ez a feladatlistán
+külön sorként nyitva marad. Android emulátor továbbra sincs telepítve ezen a
+gépen, az Android oldal csak bundle-szinten igazolt. A mockupok halvány cián
+pontrács-háttere (`radial-gradient` 24×24) még egyik képernyőn sincs meg – az
+S5 közös komponenseinél kell megoldani (SVG `Pattern` vagy csempézett kép).
+
+**Commit:** `feat: bejelentkezési képernyő és auth guard`
+
+---
 
 ## 2026-08-31 – Supabase kliens és auth store
 
@@ -381,5 +418,25 @@ hibával elhasal. Saját babel config viszont kell a NativeWind `jsxImportSource
 **Alternatíva:** `require.resolve` az `expo` csomagon keresztül – törékeny és
 olvashatatlan. Vagy nem írni saját babel configot – akkor nincs `@core` alias.
 **Visszavonható?** Igen, de a Metro nem fordulna nélküle.
+
+## D-011 – A `Pressable` lenyomott állapotát saját state követi, nem a `style` függvény-alak
+**Dátum:** 2026-08-31
+**Döntés:** A `style={({ pressed }) => …}` függvény-alakot nem használjuk. Helyette a
+`hooks/usePressed.ts` `onPressIn`/`onPressOut`-tal követi a lenyomott állapotot, és a
+stílust **objektumként** adjuk át.
+**Miért:** A NativeWind (`react-native-css-interop`) JSX-wrappere minden regisztrált
+komponenst – így a `Pressable`-t is – lecseréli az interop változatra, `className`
+nélkül is. Ez a `style` prop **függvény-alakját csendben eldobja**: se hibaüzenet, se
+figyelmeztetés, a stílus egyszerűen nem érvényesül. Konkrétan emiatt tűnt el a
+bejelentkezés gomb háttere (fekete felirat fekete háttéren) és csúszott ki a
+jelszó-szem ikon az inputból. Objektum-alakú `style` viszont hibátlanul működik.
+Mivel a `CLAUDE.md` szerint minden hover-állapot pressed-re képződik le, ez az egész
+komponenskönyvtárat érintené – ezért kell közös hook.
+**Alternatíva:** `cssInterop={false}` prop az érintett komponensekre – a könyvtár
+hivatalos kivezető útja, de nincs típusdeklarációja, tehát `any`-t vagy globális
+típus-augmentációt igényelne, amit a `CLAUDE.md` tilt. Vagy `className`-nel megoldani
+az `active:` variánssal – az viszont csak a Tailwind-tokenekre képes, a futásidőben
+számított stílusokra (pl. letiltott gomb opacitása) nem.
+**Visszavonható?** Igen, de a teljes komponenskönyvtárat érinti.
 
 <!-- ÚJ DÖNTÉSEK IDE, ALULRA, NÖVEKVŐ SORSZÁMMAL -->

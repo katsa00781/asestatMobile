@@ -1,4 +1,4 @@
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import * as dashboardTypes from '@core/dashboard-types';
@@ -16,6 +16,10 @@ import * as statFormulas from '@core/stat-formulas';
 import * as styleVocabulary from '@core/style-vocabulary';
 import * as teamAnalysis from '@core/team-analysis';
 import * as terminology from '@core/terminology';
+
+import { colors, letterSpacing, radius, tracking } from '@/constants/theme';
+import { usePressed } from '@/hooks/usePressed';
+import { useAuthStore } from '@/store/authStore';
 
 /** Ideiglenes füstteszt képernyő – az S3 lezárása után a `(tabs)` váltja fel. */
 const CORE_MODULES = {
@@ -54,6 +58,9 @@ const valuation = statFormulas.simpleValuation({
 
 export default function SmokeTestScreen() {
   const insets = useSafeAreaInsets();
+  const email = useAuthStore((state) => state.user?.email);
+  const signOut = useAuthStore((state) => state.signOut);
+  const signOutButton = usePressed();
 
   return (
     <ScrollView
@@ -68,6 +75,31 @@ export default function SmokeTestScreen() {
       <Text className="mt-6 font-condensed text-label uppercase tracking-widest text-muted">
         @core füstteszt
       </Text>
+
+      <View className="mt-16 flex-row items-center justify-between">
+        <Text className="font-body text-sm text-secondary">{email ?? 'Ismeretlen felhasználó'}</Text>
+        <Pressable
+          onPress={() => void signOut()}
+          {...signOutButton.pressHandlers}
+          accessibilityRole="button"
+          style={{
+            height: 44,
+            paddingHorizontal: 16,
+            justifyContent: 'center',
+            borderRadius: radius.md,
+            backgroundColor: signOutButton.pressed ? colors.bg.surface3 : colors.bg.surface2,
+            borderWidth: 1,
+            borderColor: colors.border.subtle,
+          }}
+        >
+          <Text
+            className="font-condensed text-sm uppercase text-primary"
+            style={{ letterSpacing: letterSpacing(13, tracking.wide) }}
+          >
+            Kijelentkezés
+          </Text>
+        </Pressable>
+      </View>
 
       <View className="mt-16 gap-12">
         <StatRow label="True Shooting" value={trueShooting} />
