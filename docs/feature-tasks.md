@@ -26,10 +26,10 @@
 
 ### `@core` mag bekötése
 
-- [ ] `scripts/sync-core.ts` – a webprojekt `lib/`-jéből másolja a 15 modult `core/`-ba, fejléc-kommentel; `npm run sync:core`
-- [ ] Első szinkron lefuttatása, `core/` commitolása
-- [ ] **`@core/stat-formulas` import füstteszt** – egy képernyőn hívj meg egy formulát valós számmal, és nézd meg, hogy fordul-e Metro alatt. **Ha ez nem megy, ne lépj tovább.**
-- [ ] A maradék 14 modul import-füsttesztje (csak import + típusellenőrzés, nem futtatás)
+- [x] `scripts/sync-core.ts` – a webprojekt `lib/`-jéből másolja a 15 modult `core/`-ba, fejléc-kommentel; `npm run sync:core`
+- [x] Első szinkron lefuttatása, `core/` commitolása
+- [x] **`@core/stat-formulas` import füstteszt** – egy képernyőn hívj meg egy formulát valós számmal, és nézd meg, hogy fordul-e Metro alatt. **Ha ez nem megy, ne lépj tovább.**
+- [x] A maradék 14 modul import-füsttesztje (csak import + típusellenőrzés, nem futtatás)
 
 ### Supabase és auth
 
@@ -128,6 +128,32 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-08-31 – @core mag bekötése és füstteszt
+
+**Mit:** A `scripts/sync-core.ts` átmásolja a webprojekt `lib/`-jéből mind a 15
+tiszta elemző modult a `core/`-ba, fejléc-kommenttel, és figyelmeztet, ha külső
+(React / Next / Supabase / Node) importot talál. Az első szinkron mind a 15 modult
+áthozta (9 511 sor), figyelmeztetés nélkül. Az `app/index.tsx` ideiglenes füstteszt
+képernyő mind a 15 modult importálja, és a `stat-formulas` három képletét valós
+számokkal hívja meg (TS%, eFG%, valuation).
+
+**Fájlok:** `scripts/sync-core.ts`, `core/*.ts` (15 modul), `app/index.tsx`,
+`package.json` (`npm run sync:core`)
+
+**Tesztelve:** `npm run typecheck` strict módban hibátlan mind a 15 core modulra.
+`npx expo export` iOS-re és Androidra lefut; a kiexportált iOS bundle-ben
+ellenőrizve, hogy a `trueShootingPct`, `simpleValuation`, `getSeasonStatsTable`
+és `fetchAllRows` benne van – tehát a `@core` alias Metro alatt is felold.
+Szimulátoros futtatás még nem volt.
+
+**Nyitva maradt:** Az `app/index.tsx` ideiglenes – az S3 auth része után a
+`(tabs)` váltja fel. A `sync-core.ts` a Node natív TS-futtatásával megy
+(Node 24), ezért `MODULE_TYPELESS_PACKAGE_JSON` figyelmeztetést ír – ártalmatlan.
+
+**Commit:** `core: @core szinkron script és első szinkron`
+
+---
 
 ## 2026-08-31 – S3 Expo váz: Router, NativeWind, design tokenek, fontok
 
