@@ -49,7 +49,7 @@
 - [x] `store/filterStore.ts` – `selectedSeasonId`, `selectedTeamId`, AsyncStorage perzisztálás, `hydrated` flag
 - [x] `hooks/useFilterData.ts` – `seasons` + `teams` betöltés, alapértelmezett szezon az `is_current`-ből
 - [x] `components/FilterSheet.tsx` – szezon/csapat választó bottom sheet a mockup szerint; Android hardveres back kezelése
-- [ ] `hooks/useGameData.ts` – meccsek + fixtures lekérése, `@core/season-tables` + `@core/fetch-all-rows` használatával
+- [x] `hooks/useGameData.ts` – meccsek + fixtures lekérése, `@core/season-tables` + `@core/fetch-all-rows` használatával
 - [ ] `hooks/usePlayerData.ts` – szezon-aggregált játékosstatisztikák, `@core/player-stat-mapping` mappinggel
 - [ ] Lusta betöltési stratégia: tabonkénti fetch, cache a store-ban a szűrő élettartamára
 - [ ] Hibakezelés: hálózati hiba → újrapróbálás gombos hibapanel; üres adat → `EmptyState`
@@ -129,6 +129,72 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-08-31 – Meccsek és fixtures (`useGameData`)
+
+**Mit:** Elkészült a `hooks/useGameData.ts`: a kiválasztott szezon és csapat
+lejátszott meccsei (`games`), a hátralévő találkozók (`league_fixtures`), és a
+kettőből a `nextFixture` / `lastGame` gyorselérés, plusz a `teamStats`
+összesítés (lejátszott, győzelem/vereség, átlag szerzett/kapott pont,
+átlagos pontkülönbség). A szűrőt a hook maga olvassa a `filterStore`-ból, a
+fixture-ök csapatneveit a `useFilterData` listájából oldja fel (D-020).
+Mindkét lekérdezés `@core/fetch-all-rows`-szal lapoz, és minden lekérdezés
+szűrt `season_id` + csapat szerint. Az eredmény szűrőpáronként
+(`szezon:csapat`) modulszintű cache-be kerül, a `reload()` üríti.
+
+Ha a szűrő listája elhasal, a hook nem ragad töltés-állapotban: átveszi a
+`useFilterData` hibáját, és a `reload()` mindkettőt újratölti.
+
+A „ma" határnapot **helyi idő szerint** állítjuk elő, nem `toISOString()`-gel:
+az UTC-alapú számítás éjfél után egy nappal korábbi dátumot adna, és a mai
+meccs kieshetne a közelgők közül.
+
+**Fájlok:** `hooks/useGameData.ts`, `types/games.ts`
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan.
+
+A hook **valódi kódját** Node alatt is lefuttattam (babel-lel CJS-re fordítva,
+a `react`, a `filterStore` és az AsyncStorage dublőrözve, de **éles** Supabase
+klienssel), több esetre:
+(1) 2025/2026 + Atomerőmű SE → 58 meccs, `lastGame` a 2026-05-25-i Kaposvár
+elleni vereség, `teamStats` 40–18, 89.8 / 80.7 pont;
+(2) ugyanez **2026-04-01-re hamisított rendszerdátummal** → 4 közelgő fixture,
+`nextFixture` az Alba Fehérvár elleni idegenbeli, helyes `isHome: false`-szal
+és feloldott csapatnevekkel (ma nincs közelgő találkozó, ezért kellett a
+hamis dátum a fixture-ág futtatásához);
+(3) 2024/2025 + ASE → 26 meccs, 23–3;
+(4) 2025/2026 + Kaposvár → 40 meccs (a szűrés tehát tényleg csapatra megy);
+(5) üres szezon (2026/2027) és nem létező azonosítók → üres lista, nulla
+összesítés, hiba nélkül;
+(6) szimulált szűrő-hiba → `loading: false`, a szűrő hibaüzenete jön át.
+
+Metro-oldali feloldás: ideiglenesen bekötöttem a hookot a füstteszt
+képernyőre, lefuttattam az `npx expo export`-ot iOS-re és Androidra, és
+**mindkét** bundle-ben megtaláltam a lekérdezéseket (`league_fixtures`,
+`home_team_id.eq.`, `our_team_id`, `avgConceded`). Az ideiglenes bekötést
+utána visszavontam – a munkafa csak a két új fájlt tartalmazza.
+
+**Nyitva maradt – két adatprobléma a webprojekt oldalán, nem a mobil appban:**
+
+1. **A 2025/2026 szezon `games` sorai 2024-09-27-től 2026-05-25-ig szóródnak**
+   (58 meccs), miközben a 2024/2025 szezon *ugyanazokat a 2024 őszi–2025
+   tavaszi napokat* külön 26 sorban is tartalmazza. A szezonra szűrt lista
+   tehát két szezon meccseit keveri, és emiatt a `teamStats` átlagai is két
+   szezonra átlagolnak. A mobil app csak olvas, ezt a **webprojektben** kell
+   rendezni (`games.season_id` javítása); addig a Ma és a Meccsek képernyő a
+   kevert listát fogja mutatni.
+2. **Ma (2026-08-31) egyetlen közelgő találkozó sincs**: a 2025/2026 szezon 4
+   `scheduled` sora 2026 április–májusi, tehát múltbeli dátumú. A Ma képernyő
+   „következő meccs" kártyája így üres állapotot fog kapni, amíg a
+   2026/2027-es menetrend nincs importálva.
+
+Ezen kívül a `league_fixtures` **nem tárol kezdési időpontot**, csak dátumot –
+lásd D-022. Az S6 képernyők még nem fogyasztják a hookot, így szimulátoron
+vizuálisan még nem futott.
+
+**Commit:** `feat: meccsek és fixtures lekérése a szűrő szerint`
+
+---
 
 ## 2026-08-31 – Szűrő bottom sheet (`FilterSheet`)
 
@@ -747,5 +813,53 @@ Bold, és nem kell negyedik fontfájlt bundle-be tenni.
 **Alternatíva:** `DMSans-SemiBold.ttf` felvétele – pontos lenne, de +1 asset
 és egy új `fontFamily` token mindössze ennyiért.
 **Visszavonható?** Igen, egy fontfájl és két sor.
+
+## D-020 – A `useGameData` a szűrőt maga olvassa, és szűrőpáronként cache-el
+**Dátum:** 2026-08-31
+**Döntés:** A hook nem kap paramétert: a `selectedSeasonId` / `selectedTeamId`
+párost a `filterStore`-ból, a csapatneveket a `useFilterData`-ból olvassa. A
+letöltött adat egy modulszintű `Map`-ben, `szezon:csapat` kulccsal cache-elődik.
+**Miért:** A webes párja négy paramétert kap (`seasonId`, `teamId`, `allTeams`,
+`allSeasons`), mert ott a dashboard komponens tartja a state-et. Mobilon a szűrő
+**globális és perzisztált**, így minden képernyőnek ugyanazt kellene
+átpasszolnia – felesleges propfüzér. A kulcsolt cache adja a `CLAUDE.md` „cache
+a szűrő élettartamára" elvárását: tabváltáskor nem indul új hálózati kérés, de
+szezon- vagy csapatváltásnál igen. A Map legfeljebb szezon × csapat méretű
+(most 5 × 16), tehát nem nő el.
+**Alternatíva:** Paraméteres hook, mint a weben – tesztelhetőbb, de minden
+képernyőn négy prop. Vagy Zustand store az adatnak – negyedik store ugyanezért.
+**Visszavonható?** Igen, egy fájl.
+
+## D-021 – A csapat KPI-ok a `games` tábláról jönnek, nem a szezonstat tábláról
+**Dátum:** 2026-08-31
+**Döntés:** Az átlag szerzett/kapott pont és a győzelem/vereség mérleg a `games`
+sorok `our_score` / `opp_score` / `result` mezőiből számolódik. A hook **nem
+használja** a `@core/season-tables`-t, pedig a feladatsor említi.
+**Miért:** A `games` tábla már tartalmazza a végeredményt, tehát a csapatszintű
+átlagokhoz nincs szükség a `player_game_stats_<szezon>` tábla több száz sorára –
+a webes hook azért összegez játékosonként, mert ott a játékosadat úgyis kell. Egy
+mobil KPI-ért egy nagy lekérdezést futtatni pazarlás mobilneten. A
+`getSeasonStatsTable()` ott lesz kötelező, ahol tényleg játékosbontás kell:
+a `usePlayerData` és a meccs részletei box score.
+**Alternatíva:** A webes logika másolása – konzisztens lenne a weboldallal, de
+lassabb, és két forrásból számolná ugyanazt a számot.
+**Következmény:** Ha a `games.our_score` és a játékosonkénti pontösszeg
+eltérne (hiányos box score import), a mobil KPI a `games` értékét mutatja – ez
+a helyes, mert az a hivatalos végeredmény.
+**Visszavonható?** Igen, egy függvény.
+
+## D-022 – A meccsek időpont nélkül jelennek meg, mert az adatbázisban nincs
+**Dátum:** 2026-08-31
+**Döntés:** A `TeamGame.date` és a `Fixture.gameDate` **nap pontosságú** ISO
+szöveg. A mockup „2026. szeptember 6. · szombat 18:00" sorából a kezdési
+időpont kimarad.
+**Miért:** Sem a `games.date`, sem a `league_fixtures.game_date` nem tárol
+időt (élesben ellenőrizve: minden érték `ÉÉÉÉ-HH-NN`), és a fixtures táblában
+nincs más időpont oszlop sem. A hiányzó időt kitalálni nem lehet, kamu
+18:00-t kiírni pedig félrevezetné a stábot – pont ők tudják, mikor kezd a
+csapat.
+**Alternatíva:** Séma-bővítés a weben (`game_time` oszlop + scraper) – a mobil
+app nem ír sémát, ez webprojekt-feladat. Ha megvan, itt egy mezőt kell hozzáadni.
+**Visszavonható?** Igen, ha az adat megjelenik.
 
 <!-- ÚJ DÖNTÉSEK IDE, ALULRA, NÖVEKVŐ SORSZÁMMAL -->
