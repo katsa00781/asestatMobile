@@ -45,13 +45,15 @@ export const colors = {
     strong: '#3A5478',
     /** Mátrix / lista belső elválasztó – a subtle-nél is halkabb */
     hairline: '#0F2040',
+    /** Sheet listasor elválasztója (szűrő bottom sheet mockup) */
+    row: '#16233D',
   },
+  /** Modal / bottom sheet mögötti elsötétítés */
+  scrim: 'rgba(2,6,14,0.6)',
   /** Kizárólag gradiens- és felületárnyalatokhoz, közvetlenül ne használd */
   shade: {
     /** Cián gradiens sötét vége (progress bar) */
     cyanDeep: '#0096B8',
-    /** Aktív listasor árnyalata */
-    rowActive: '#16233D',
     /** Sheet fejléc árnyalata */
     sheetHeader: '#101E33',
   },

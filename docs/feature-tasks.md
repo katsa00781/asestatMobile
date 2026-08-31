@@ -48,7 +48,7 @@
 
 - [x] `store/filterStore.ts` – `selectedSeasonId`, `selectedTeamId`, AsyncStorage perzisztálás, `hydrated` flag
 - [x] `hooks/useFilterData.ts` – `seasons` + `teams` betöltés, alapértelmezett szezon az `is_current`-ből
-- [ ] `components/FilterSheet.tsx` – szezon/csapat választó bottom sheet a mockup szerint; Android hardveres back kezelése
+- [x] `components/FilterSheet.tsx` – szezon/csapat választó bottom sheet a mockup szerint; Android hardveres back kezelése
 - [ ] `hooks/useGameData.ts` – meccsek + fixtures lekérése, `@core/season-tables` + `@core/fetch-all-rows` használatával
 - [ ] `hooks/usePlayerData.ts` – szezon-aggregált játékosstatisztikák, `@core/player-stat-mapping` mappinggel
 - [ ] Lusta betöltési stratégia: tabonkénti fetch, cache a store-ban a szűrő élettartamára
@@ -129,6 +129,57 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-08-31 – Szűrő bottom sheet (`FilterSheet`)
+
+**Mit:** Elkészült a `components/FilterSheet.tsx` a
+`docs/mockups/extracted/szuro-bottom-sheet.html` szerint: grabber, „Szűrő" /
+„Kész" fejléc, Szezon és Csapat szekció, halványuló elválasztó, lábjegyzet.
+Az aktív sor `surface3` háttérrel, bal oldali 2pt cián sávval és pipával jelöl,
+a szezonok JetBrains Monóval, a csapatok DM Sansszal futnak. A választás
+azonnal érvényesül a `filterStore`-ban (a mockupban sincs „Mégse"), a „Kész"
+csak bezár.
+
+Zárás négyféleképpen: „Kész", a scrimre koppintás, a fejléc lehúzása
+(96pt vagy 800 px/s fölött), és **Android hardveres back** a `Modal`
+`onRequestClose`-ával. A nyitás/zárás saját Reanimated animáció
+(300 ms, `Easing.out(Easing.cubic)`), a scrim opacitása a sheet
+pozíciójából interpolálódik, így lehúzás közben együtt halványul.
+
+A listákat a sheet maga kéri a `useFilterData`-ból (a modulszintű cache miatt
+ez nem plusz kérés). Hiba esetén a lista fölött hibapanel jelenik meg „Újra"
+gombbal, ami a hook `reload()`-ját hívja – ezzel az S4 hibakezelési sorának
+egy darabja már él, de a sor nyitva marad, mert a képernyők még nincsenek meg.
+A betöltés alatti helykitöltő sorok egyelőre shimmer nélküliek; azt az S5
+`SkeletonBlock` hozza majd.
+
+A mockup halványuló szélű elválasztóját `react-native-svg` gradienssel
+rajzoljuk. Ez nem új dependency: a `lucide-react-native` úgyis behúzza, és így
+nem kellett a mockuptól tömör vonalra egyszerűsíteni.
+
+A kipróbáláshoz a füstteszt képernyő (`app/index.tsx`) fejlécébe bekerült a
+mockup szerinti szűrő-chip (`2025/2026 · Atomerőmű ▾`), ami megnyitja a
+sheetet. Ez **ideiglenes**: a végleges helye az S6 tab-fejléce.
+
+**Fájlok:** `components/FilterSheet.tsx`, `app/index.tsx`,
+`constants/theme.ts` (`colors.scrim`, `border.row`), `tailwind.config.ts`
+(`scrim`, `line-row`, 48-as spacing)
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan – utóbbi
+átszervezést kényszerített, lásd D-016. `npx expo export` **iOS-re és
+Androidra is** lefut, és mindkét bundle tartalmazza a komponenst
+(`filterSheetDivider` az SVG gradiensből).
+
+**Nyitva maradt:** **Szimulátoros/eszközös vizuális ellenőrzés még nem
+történt** – a sheet megjelenését, az animációt, a lehúzás-gesztust és az
+Android hardveres back gombot élőben kell végigkattintani. Az Android ág
+(hardveres back, `statusBarTranslucent` scrim a státuszsáv alatt, RNGH a
+natív `Modal`-on belül) továbbra sem futott, mert nincs emulátor ezen a gépen.
+16 csapatnál a lista görgethető – ezt is élőben érdemes megnézni.
+
+**Commit:** `feat: szűrő bottom sheet szezon- és csapatválasztással`
+
+---
 
 ## 2026-08-31 – Szűrő adatai (`useFilterData`)
 
@@ -611,5 +662,90 @@ minden fogyasztónál, és a devtools-ban látszana; cserébe egy negyedik store
 több kód ugyanazért. Vagy cache nélkül minden mountnál újratölteni – felesleges
 kérés minden tabváltásnál.
 **Visszavonható?** Igen, egy fájl.
+
+## D-015 – A bottom sheet natív `Modal` + saját Reanimated animáció
+**Dátum:** 2026-08-31
+**Döntés:** A `FilterSheet` React Native `Modal`-ra épül (`transparent`,
+`animationType="none"`, `statusBarTranslucent`), a csúszást és a scrim
+halványulását magunk animáljuk Reanimatedben, a lehúzást
+`react-native-gesture-handler` `Pan` gesztusa adja a fejlécen.
+**Miért:** Így nincs új dependency, és a `Modal` `onRequestClose`-a **ingyen
+hozza az Android hardveres back gombot**, amit a `CLAUDE.md` kötelezővé tesz.
+A natív `animationType="slide"` a scrimet is együtt csúsztatná, a mockup viszont
+álló scrimet és külön csúszó sheetet mutat. A gesztust csak a fejlécen figyeljük,
+hogy a 16 elemű csapatlista görgetésével ne versenyezzen.
+**Alternatíva:** `@gorhom/bottom-sheet` – kényelmesebb (snap pointok, backdrop),
+de új dependency egyetlen sheetért, és a `CLAUDE.md` ~12 csomagos plafonja szűk.
+Vagy a sheetet a gyökér layoutba tett abszolút réteggel megoldani – akkor a back
+gombot kézzel, `BackHandler`-rel kellene kezelni.
+**Visszavonható?** Igen, egy fájl.
+
+## D-016 – A sheet animációját `useDerivedValue` hajtja, nem `useEffect`
+**Dátum:** 2026-08-31
+**Döntés:** A nyitottságot (`progress`) egy `useDerivedValue` számolja a
+`visible` propból, a záró unmountot az animáció `withTiming` visszahívása
+intézi (`runOnJS(setMounted)`), a nyitás `mounted` flagjét pedig renderidőben
+állítjuk (`if (visible && !mounted) setMounted(true)`). A sheet magassága sima
+`useState`, nem shared value.
+**Miért:** Az `eslint-config-expo` React Compiler szabályai (`react-hooks/
+immutability`, `react-hooks/set-state-in-effect`) **hibával elutasítják** a
+Reanimated dokumentációjában szokásos mintát: shared value írása effectből, és
+`setState` effect-törzsben. A `useDerivedValue`-s alak ugyanazt csinálja
+kevesebb kóddal, effect nélkül, és átmegy a linten. Ugyanezért lett a
+magasság state: a `onLayout` JS-oldali visszahívás, onnan shared value-t írni
+szintén tiltott – a worklet így a sima számot zárja körbe.
+**Alternatíva:** `// eslint-disable-next-line` a négy helyre – gyors, de a
+következő komponensnél ugyanígy visszajönne, és a szabály kikapcsolásával
+elveszne a valódi hibák jelzése is.
+**Következmény:** Minden további animált komponensnél ezt a mintát kövessük:
+shared value-t csak worklet ír, prop-vezérelt animáció `useDerivedValue`-val.
+**Visszavonható?** Igen, de a lint akkor pirosra vált.
+
+## D-017 – A sheet magassága tartalomfüggő, nem a mockup fix 508pt-ja
+**Dátum:** 2026-08-31
+**Döntés:** A sheet a tartalmához igazodik, felső korláttal: legfeljebb a
+képernyő magassága mínusz a felső safe area és 24pt. A két szekció közös
+`ScrollView`-ban görög, a lábjegyzet és a fejléc fix marad.
+**Miért:** A mockup 4 szezonnal és 3 csapattal számolt, élesben viszont **5
+szezon és 16 csapat** van – fix 508pt-tal a csapatlista fele levágódna. A
+tartalomfüggő magasság kevés elemnél pontosan a mockup arányait adja vissza,
+soknál pedig görgethető marad.
+**Alternatíva:** Fix magasság a mockup szerint, belül görgetéssel – kevés
+elemnél üres helyet hagyna a lábjegyzet fölött. Vagy snap pointok
+(fél/teljes magasság) – a `@gorhom/bottom-sheet` nélkül sok kód.
+**Visszavonható?** Igen, egy stílus.
+
+## D-018 – Új tokenek a mockupból: `colors.scrim` és `border.row`
+**Dátum:** 2026-08-31
+**Döntés:** A `constants/theme.ts` két ponton bővült: `colors.scrim`
+(`rgba(2,6,14,0.6)`, a modal mögötti elsötétítés) új, a `shade.rowActive`
+(`#16233D`) pedig `border.row` néven került a `border` csoportba. A
+`tailwind.config.ts` `scrim` és `line-row` néven kapta meg őket.
+**Miért:** Mindkét érték **szó szerint az elfogadott szűrő-mockupból** jön, nem
+új design ötlet – csak eddig nem volt hova írni őket, márpedig hardcoded hexet
+a `CLAUDE.md` tilt. Az átnevezés azért kellett, mert a `#16233D` valójában a
+listasorok **elválasztó vonala**, az aktív sor háttere ellenben `surface3`
+(`#162440`); a régi `rowActive` név pont a rossz helyre csábított volna. A
+`shade` csoport kommentje szerint azokat az értékeket közvetlenül nem használjuk,
+egy elválasztó vonal viszont közvetlen használat – ezért került a `border` alá.
+A `shade.rowActive`-ra a projektben még nem hivatkozott semmi, így az átnevezés
+nem érintett kódot. A `tailwind.config.ts` spacing skálája a 48-cal bővült (a
+mockup listasor-magassága).
+**Alternatíva:** A `shade.rowActive` megtartása a régi néven – kevesebb
+mozgatás, cserébe félrevezető név a legelső listás komponensben.
+**Visszavonható?** Igen, két fájl.
+
+## D-019 – A csapatsorok DM Sans Medium betűvel futnak, nem 600-assal
+**Dátum:** 2026-08-31
+**Döntés:** A mockup `font-weight:600`-at kér a csapatnevekre; mi a meglévő
+`DMSans-Medium` (500) fájlt használjuk.
+**Miért:** A projektben három DM Sans súly van (Regular 400, Medium 500,
+Bold 700) – 600 nincs. RN-ben a `fontWeight` **nem szintetizál** súlyt a
+betöltött TTF-ből: vagy van fájl, vagy a legközelebbi kerül renderelésre,
+platformonként eltérően. A Medium optikailag közelebb van a 600-hoz, mint a
+Bold, és nem kell negyedik fontfájlt bundle-be tenni.
+**Alternatíva:** `DMSans-SemiBold.ttf` felvétele – pontos lenne, de +1 asset
+és egy új `fontFamily` token mindössze ennyiért.
+**Visszavonható?** Igen, egy fontfájl és két sor.
 
 <!-- ÚJ DÖNTÉSEK IDE, ALULRA, NÖVEKVŐ SORSZÁMMAL -->

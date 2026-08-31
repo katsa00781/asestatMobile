@@ -40,14 +40,15 @@ const config: Config = {
       'line-active': colors.border.active,
       'line-strong': colors.border.strong,
       hairline: colors.border.hairline,
+      'line-row': colors.border.row,
 
+      scrim: colors.scrim,
       'cyan-deep': colors.shade.cyanDeep,
-      'row-active': colors.shade.rowActive,
       'sheet-header': colors.shade.sheetHeader,
     },
     spacing: px([
       0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 17, 18, 20, 24, 28, 32, 36, 40, 44,
-      52, 56, 64, 96, 108,
+      48, 52, 56, 64, 96, 108,
     ]),
     borderRadius: {
       none: '0px',
