@@ -47,7 +47,7 @@
 ## S4 – Adatréteg
 
 - [x] `store/filterStore.ts` – `selectedSeasonId`, `selectedTeamId`, AsyncStorage perzisztálás, `hydrated` flag
-- [ ] `hooks/useFilterData.ts` – `seasons` + `teams` betöltés, alapértelmezett szezon az `is_current`-ből
+- [x] `hooks/useFilterData.ts` – `seasons` + `teams` betöltés, alapértelmezett szezon az `is_current`-ből
 - [ ] `components/FilterSheet.tsx` – szezon/csapat választó bottom sheet a mockup szerint; Android hardveres back kezelése
 - [ ] `hooks/useGameData.ts` – meccsek + fixtures lekérése, `@core/season-tables` + `@core/fetch-all-rows` használatával
 - [ ] `hooks/usePlayerData.ts` – szezon-aggregált játékosstatisztikák, `@core/player-stat-mapping` mappinggel
@@ -129,6 +129,62 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-08-31 – Szűrő adatai (`useFilterData`)
+
+**Mit:** Elkészült a `hooks/useFilterData.ts`: betölti a `seasons` és a `teams`
+listát, és gondoskodik róla, hogy a `filterStore` mindig **érvényes**
+azonosítót tartalmazzon. Ha nincs mentett választás, alapértelmezésre esik:
+szezonnál az `is_current`, egyébként a legfrissebb; csapatnál az `is_primary`,
+egyébként névtartalék (lásd D-013). Ugyanez fut akkor is, ha a mentett
+azonosítóra már nem jön adat – ezzel lezárult a `filterStore` bejegyzésében
+nyitva hagyott „a tárolt azonosító érvényességét senki nem ellenőrzi" pont.
+Az alapértelmezés csak a store visszaolvasása (`hydrated`) után íródik ki,
+különben felülírná a felhasználó korábbi választását.
+
+A két lista modulszintű ígéretben cache-elődik, nem store-ban (D-014), és a
+`reload()` üríti a cache-t a későbbi hibapanel újrapróbálás gombjának.
+A Supabase válaszát a `types/filters.ts` `Season` / `Team` alakjára
+validáljuk – hiányos sor kiesik, hiányzó `short_name` esetén a teljes név lép
+be. A hook a nyers snake_case oszlopokat camelCase-re fordítja, hogy a UI ne
+lásson adatbázis-alakot.
+
+**Fájlok:** `hooks/useFilterData.ts`, `types/filters.ts`
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan.
+
+A hook **valódi kódját** Node alatt is lefuttattam (babel-lel CJS-re fordítva, a
+`react` és a store dublőrözve, de **éles** Supabase klienssel), 12 ellenőrzéssel:
+éles lekérdezés (5 szezon, 16 csapat, `start_date` szerinti sorrend), az
+alapértelmezések éles adaton (2025/2026 az `is_current`-ből, Atomerőmű SE a
+névtartalékból), szintetikus adaton (`is_primary` erősebb a névnél; nincs
+egyezés → első elem; nincs `is_current` → legfrissebb), és a
+határvalidáció (hiányos sor kiesik, `is_current: 'true'` string nem igaz,
+hiányzó `short_name` → teljes név, nem tömb válasz → üres lista).
+
+**Futtatva iPhone 17 Pro (iOS 26.5) szimulátoron, Expo Go alatt**, ideiglenesen a
+füstteszt képernyőre kötve, három körben:
+(1) üres tárolóval indulva `loading: true` → betöltés → a store megkapja a
+2025/2026 + Atomerőmű SE alapértelmezést;
+(2) nem alapértelmezett választást (2024/2025 + Sopron KC) beírva, majd az Expo
+Go-t **leállítva és újraindítva** a választás túlélte a hidegindítást – az
+alapértelmezés nem írta felül;
+(3) törölt elemet szimulálva (`torolt-szezon-id` / `torolt-csapat-id`) a hook a
+következő mountnál visszaesett a 2025/2026 + Atomerőmű SE alapértelmezésre.
+Az ideiglenes bekötést utána visszavontam, a munkafa csak a két új fájlt
+tartalmazza.
+
+**Nyitva maradt:** A **hibaág** (hálózati hiba → `error` szöveg → `reload()`)
+valós hálózatkimaradással nincs kipróbálva – a hozzá tartozó UI (hibapanel
+újrapróbálás gombbal) az S4 utolsó sora, ott lesz értelme együtt tesztelni.
+A csapatlista **nincs szezonra szűrve**: a 2026/2027 szezonban még nincs meccs,
+mégis mind a 16 csapat választható. Ez a v1-ben elfogadható, de a Meccsek/
+Játékosok képernyőknél üres állapotot fog adni. Android emulátor továbbra sincs
+telepítve ezen a gépen.
+
+**Commit:** `feat: szűrő adatok betöltése szezon- és csapatlistával`
+
+---
 
 ## 2026-08-31 – Szűrő store (`filterStore`)
 
@@ -519,6 +575,41 @@ AsyncStorage bejegyzés különben véglegesen a betöltő képernyőn ragasztan
 **Alternatíva:** Kézi `AsyncStorage.getItem`/`setItem` az `initAuth()` mintájára –
 konzisztensebb lenne az `authStore`-ral, de több kód és több hibalehetőség.
 Vagy `expo-secure-store` – a szűrő nem titok, felesleges.
+**Visszavonható?** Igen, egy fájl.
+
+## D-013 – Az alapértelmezett csapat névtartalékkal dől el
+**Dátum:** 2026-08-31
+**Döntés:** A `defaultTeam()` sorrendje: `is_primary` → névegyezés az
+`OWN_TEAM_NAMES` konstanssal (`atomerőmű se`, `ase`) → a lista első eleme.
+**Miért:** A `teams` tábla a **teljes bajnokságot** tartalmazza (16 csapat,
+mindegyiknek van játékosa és meccse), és élesben **egyetlen sornál sincs
+`is_primary: true`** – a migráció ugyan `is_primary: true`-val szúrta be az
+„ASE" sort, de az mára „Atomerőmű SE"-vé alakult a jelölés nélkül. Tisztán
+`is_primary`-re hagyatkozva az app az „Alba Fehérvár"-ral nyílna (névsor
+szerinti első), ami egy ASE-belsős appban zavaró. A mockup „ASE / ASE U20 /
+ASE Akadémia" listája design-placeholder volt, valós adata nincs.
+**Alternatíva:** Csak `is_primary`, és a weben beállítani a jelölést – de a
+mobil app nem ír, tehát ez rajtunk kívül álló feltétel lenne. Vagy alapértelmezés
+nélkül indulni és kötelező választást kérni – egy extra lépés minden telepítésnél.
+**Következmény:** Ha valaki a weben bekapcsolja az `is_primary`-t az ASE-n, a
+névtartalék magától kikopik. Ha az ASE-t átnevezik, a tartalék elcsúszik – ezért
+érdemes a weben egyszer beállítani az `is_primary`-t.
+**Visszavonható?** Igen, egy függvény.
+
+## D-014 – A szezon/csapat lista modulszintű cache-ben, nem Zustand store-ban
+**Dátum:** 2026-08-31
+**Döntés:** A `useFilterData` egy modulszintű `Promise` cache-ben tartja a
+betöltött listákat, nem külön Zustand store-ban. Hibára a cache ürül, a
+`reload()` pedig kényszerítetten újratölt.
+**Miért:** A két lista **változatlan bemenetű** – nem függ a szűrőtől, és az app
+élettartama alatt gyakorlatilag statikus. Több képernyő is kérni fogja
+(fejléc-chip, FilterSheet), és így mindegyik ugyanazt az egy hálózati kérést
+osztja meg, extra store és extra fájl nélkül. A `CLAUDE.md` mappastruktúrája is
+hookként nevezi meg ezt (`hooks/useFilterData.ts`), nem store-ként.
+**Alternatíva:** `store/filterDataStore.ts` – nem duplikálná a `useState`-et
+minden fogyasztónál, és a devtools-ban látszana; cserébe egy negyedik store és
+több kód ugyanazért. Vagy cache nélkül minden mountnál újratölteni – felesleges
+kérés minden tabváltásnál.
 **Visszavonható?** Igen, egy fájl.
 
 <!-- ÚJ DÖNTÉSEK IDE, ALULRA, NÖVEKVŐ SORSZÁMMAL -->
