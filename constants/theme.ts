@@ -78,6 +78,21 @@ export const glow = {
  */
 export type AccentTone = keyof typeof glow;
 
+/**
+ * Accent hangnem → tömör szín. A `colors` fája ezt hangnem szerint nem tudja
+ * kiadni (a `cyan` az `accent`, a `positive` a `semantic` ág alatt van), ezért
+ * a leképezés itt él egyszer – a `GlowCard`, a `StackedRow` és a `Badge`
+ * ugyanezt használja.
+ */
+export const accentColor: Record<AccentTone, string> = {
+  cyan: colors.accent.cyan,
+  orange: colors.accent.orange,
+  ai: colors.accent.ai,
+  positive: colors.semantic.positive,
+  negative: colors.semantic.negative,
+  warning: colors.semantic.warning,
+};
+
 /** 4pt rács */
 export const spacing = {
   0: 0,
@@ -177,6 +192,7 @@ export const tapTarget = 44;
 export const theme = {
   colors,
   glow,
+  accentColor,
   spacing,
   radius,
   fontSize,

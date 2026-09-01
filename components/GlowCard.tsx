@@ -13,7 +13,7 @@ import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { Pressable, View } from 'react-native';
 
-import { type AccentTone, colors, radius } from '@/constants/theme';
+import { type AccentTone, accentColor, colors, radius } from '@/constants/theme';
 import { usePressed } from '@/hooks/usePressed';
 
 /** Az accent sáv szélessége a mockupban. */
@@ -32,15 +32,6 @@ interface GlowCardProps {
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
 }
-
-const ACCENT_COLORS: Record<AccentTone, string> = {
-  cyan: colors.accent.cyan,
-  orange: colors.accent.orange,
-  ai: colors.accent.ai,
-  positive: colors.semantic.positive,
-  negative: colors.semantic.negative,
-  warning: colors.semantic.warning,
-};
 
 export function GlowCard({
   children,
@@ -71,7 +62,7 @@ export function GlowCard({
         top: 0,
         bottom: 0,
         width: ACCENT_BAR,
-        backgroundColor: ACCENT_COLORS[accent],
+        backgroundColor: accentColor[accent],
         borderTopLeftRadius: corners,
         borderBottomLeftRadius: corners,
       }}

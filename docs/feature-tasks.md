@@ -60,7 +60,7 @@
 
 - [x] `components/GlowCard.tsx` – surface1 + subtle border + opcionális accent glow réteg (border + alacsony opacitású háttér, **nem** shadowColor)
 - [x] `components/StatTile.tsx` – label + JetBrains Mono érték + opcionális trend és accent (a webes `StatCard` mobil párja)
-- [ ] `components/StackedRow.tsx` – listaelem, függőlegesen csoportosított adatokkal (a `DataTable` sor mobil párja)
+- [x] `components/StackedRow.tsx` – listaelem, függőlegesen csoportosított adatokkal (a `DataTable` sor mobil párja)
 - [ ] `components/StatMatrix.tsx` – vízszintesen görgethető statisztikai mátrix **fagyasztott első oszloppal**; iOS és Android görgetés-szinkron ellenőrzése
 - [ ] `components/Badge.tsx` – 7 variáns (cyan / orange / ai / positive / negative / warning / neutral)
 - [ ] `components/SkeletonBlock.tsx` – shimmer betöltés (Reanimated)
@@ -129,6 +129,57 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-01 – Listasor (`StackedRow`)
+
+**Mit:** Elkészült a `components/StackedRow.tsx`, a webes `DataTable` sorának
+mobil párja. A sor a `jatekosok-lista.html` játékossorát replikálja: 68pt
+magasság, 16pt vízszintes margó, `lg` sarok, surface1 háttér; balra 32pt-os kör
+(surface3 háttér, `border.active` keret, Barlow Condensed 13pt mezszám), középen
+a függőlegesen csoportosított cím + alcím (DM Sans 15 / 13, 2pt térköz, egy
+sorra tördelve), jobbra fix 48pt széles numerikus oszlopok 16pt térközzel,
+JetBrains Mono 20pt, `tabular-nums`, jobbra igazítva.
+
+A kiemelt sor (kiválasztott **vagy** éppen lenyomott) surface2 hátteret és bal
+oldali 2pt-os cián sávot kap – a mockup `pressed` állapota. A `GlowCard` 3pt-os
+accent sávjától ez szándékosan eltér, és a sor nem is a `GlowCard`-ra épül,
+lásd D-032.
+
+Ugyanebben a fájlban a `StackedRowHeader`: a lista fölötti oszlopfejléc, ami a
+sorokkal azonos `metricWidth`-et és térközt használ, hogy a feliratok a számok
+fölé essenek. A mockupban ez a fejléc csak az első sor fölött jelenik meg.
+
+Az oszlopértékek `tone`-t kaphatnak (`AccentTone`), hogy a meccslistán a nyert
+meccs pontszáma kiemelhető legyen. Az accent hangnem → szín leképezés a
+`constants/theme.ts` új `accentColor` exportjába került, mert a `GlowCard` már
+tartalmazta ugyanezt a hat sort, és a `Badge` lesz a harmadik – a `GlowCard`
+mostantól ezt használja, viselkedése nem változott.
+
+**Fájlok:** `components/StackedRow.tsx` (új), `constants/theme.ts`,
+`components/GlowCard.tsx`
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan.
+
+Metro-oldal: ideiglenesen kitettem az `app/index.tsx` füstteszt képernyőre egy
+fejlécet és négy sort (nyomható alap, `active` sor `positive` hangnemű
+oszloppal, valamint kör és metrika nélküli meccssor), majd lefuttattam az
+`npx expo export`-ot iOS-re és Androidra. **Mindkét** Hermes bundle tartalmazza
+az összes szöveget és a `tabular-nums` beállítást. Az ékezetes sztringek a
+Hermes string table-ben UTF-16-ban vannak, ezért a nyers `grep` nem találja
+őket – a keresést mindkét kódolásra le kell futtatni. Az ideiglenes kitételt
+visszavontam.
+
+**Nyitva maradt:** Eszközön még nem futott: a 2pt-os sáv és a `lg` sarok
+találkozása, valamint a hosszú játékosnév „…"-re vágása vizuálisan nincs
+hitelesítve – az S6 játékoslistáján kell megnézni, Androidon is. A 48pt-os
+oszlopszélesség a mockup háromjegyű értékeire lett szabva; ha a meccslistán
+ennél szélesebb kell, a `metricWidth` proppal állítható. Nagy rendszer-betűméret
+mellett a sor a `minHeight` miatt nőhet – ez szándékos, de eszközön ellenőrizni
+kell.
+
+**Commit:** `feat: listasor komponens`
+
+---
 
 ## 2026-09-01 – KPI csempe (`StatTile`)
 
@@ -1265,3 +1316,34 @@ nőne meg jelentősen egyetlen három glifáért; (b) a monóban meglévő U+219
 U+2193 nyíl – ez viszont már **más jel**, nem a jóváhagyott mockupé (D-008).
 **Visszavonható?** Igen, a `TrendMark` egy függvénye; ha valaha teljes
 betűkészlet kerül be, visszaírható a karakter.
+
+## D-032 – A `StackedRow` nem a `GlowCard`-ra épül
+**Dátum:** 2026-09-01
+**Döntés:** A listasor saját felületet rajzol (háttér, sarok, sáv), nem a
+`GlowCard`-ot csomagolja be, és a kiemelés sávja 2pt, nem a `GlowCard` 3pt-os
+accentje.
+**Miért:** A két alak három ponton tér el a mockupban: (a) a sor magassága fix
+68pt, függőleges margó nélkül, a `GlowCard` viszont egyetlen `padding` számmal
+dolgozik körben; (b) a sor sávja 2pt és **nem** tolja el a tartalmat (a bal
+margó marad 16pt), a `GlowCard`-é 3pt és megnöveli a `paddingLeft`-et; (c) a sor
+sávja állapotfüggő (kiválasztott / lenyomott), a kártyáé statikus jelölés. Ezek
+kikapcsolásához a `GlowCard`-nak három új propot kellene kapnia, amit egyetlen
+kártya sem használna.
+**Alternatíva:** `GlowCard` bővítése `barWidth` / `inset` / `paddingVertical`
+propokkal – ettől a kártya API-ja a listasor kedvéért hígulna fel. Az érdemi
+közös rész (accent hangnem → szín) így is meg van osztva a
+`constants/theme.ts` `accentColor` exportján keresztül.
+**Visszavonható?** Igen, a két komponens független, egyik hívóit sem érinti.
+
+## D-033 – Az oszlopfeliratok 0.12em betűközzel futnak, nem a mockup 0.1em-jével
+**Dátum:** 2026-09-01
+**Döntés:** A `StackedRowHeader` feliratai a meglévő `tracking.label` (0.12em)
+tokent használják, nem a mockup 0.1em értékét.
+**Miért:** 11pt-on a különbség 1.32pt vs 1.10pt, azaz 0.22pt az egész feliraton
+– optikailag nem megkülönböztethető. A `CLAUDE.md` ALL CAPS labelre 1.2–1.6pt
+betűközt ír elő, amibe a mockup 1.10pt-ja bele sem fér, a `tracking.label`
+viszont igen. Új token felvétele engedélyköteles (`CLAUDE.md` – döntési
+szabályok), és egyetlen felirattípusért nem indokolt bővíteni a skálát.
+**Alternatíva:** `tracking.wide` (0.08em = 0.88pt) – az a gombfelirat tokenje és
+még messzebb esik; vagy új `tracking` érték – ehhez a te jóváhagyásod kellene.
+**Visszavonható?** Igen, egy sor a `StackedRow` `headerLabel` stílusában.
