@@ -72,6 +72,12 @@ export const glow = {
   warning: { fill: 'rgba(255,182,39,0.14)', border: 'rgba(255,182,39,0.30)' },
 } as const;
 
+/**
+ * Accent hangnem – a `glow` kulcsai. A `GlowCard` sávja és a `Badge`
+ * variánsai ebből választanak, hogy ne duplázódjon a lista.
+ */
+export type AccentTone = keyof typeof glow;
+
 /** 4pt rács */
 export const spacing = {
   0: 0,

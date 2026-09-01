@@ -58,7 +58,7 @@
 
 ## S5 – Közös UI komponensek
 
-- [ ] `components/GlowCard.tsx` – surface1 + subtle border + opcionális accent glow réteg (border + alacsony opacitású háttér, **nem** shadowColor)
+- [x] `components/GlowCard.tsx` – surface1 + subtle border + opcionális accent glow réteg (border + alacsony opacitású háttér, **nem** shadowColor)
 - [ ] `components/StatTile.tsx` – label + JetBrains Mono érték + opcionális trend és accent (a webes `StatCard` mobil párja)
 - [ ] `components/StackedRow.tsx` – listaelem, függőlegesen csoportosított adatokkal (a `DataTable` sor mobil párja)
 - [ ] `components/StatMatrix.tsx` – vízszintesen görgethető statisztikai mátrix **fagyasztott első oszloppal**; iOS és Android görgetés-szinkron ellenőrzése
@@ -129,6 +129,45 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-01 – Kártya alap (`GlowCard`)
+
+**Mit:** Elkészült a `components/GlowCard.tsx`, az S5 első közös komponense: a
+mockup kártyáinak alakja egy helyen. surface1 háttér, `corner` szerinti
+sarokkerekítés (`lg` 10 a sorszerű, `xl` 14 a kiemelt kártyáknak), állítható
+`padding` (a mockupban 14 vagy 16), és opcionális bal oldali 3pt-os accent sáv
+a hat accent hangnem valamelyikével. A sáv sarkai a kártyáéval egyeznek, a
+kártya bal margója pedig a sáv szélességével nő (14 → 17, 16 → 19) – pontosan
+úgy, ahogy a mockup számol. Az `accent="ai"` a webes `.ai-marker` mobil párja.
+
+A kártya nyomhatóvá tehető: `onPress` esetén `Pressable`, lenyomva surface1 →
+surface2 háttérváltással. A lenyomott állapotot a `usePressed` követi, mert a
+`style` függvény-alakját a NativeWind interop eldobja (D-011).
+
+A `constants/theme.ts` új exportja az `AccentTone` típus (`keyof typeof glow`),
+hogy a hat hangnem listája ne duplázódjon a `GlowCard` és a később következő
+`Badge` között.
+
+**Fájlok:** `components/GlowCard.tsx` (új), `constants/theme.ts`
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan.
+
+Metro-oldal: ideiglenesen kitettem három `GlowCard`-ot az `app/index.tsx`
+füstteszt képernyőre (orange sáv `xl`/16-os kártyán, nyomható `ai` sávos, és
+sáv nélküli sima), majd lefuttattam az `npx expo export`-ot iOS-re és
+Androidra. **Mindkét** Hermes bundle tartalmazza mind a három kártya szövegét
+és az `accessibilityLabel`-t. Az ideiglenes kitételt visszavontam.
+
+**Nyitva maradt:** Eszközön még nem futott, tehát a sáv és a kerekített sarok
+találkozása vizuálisan nincs ellenőrizve – ezt az S6 első képernyőjén kell
+megnézni, Androidon is (ott a 3pt-os abszolút sáv a kártya `borderRadius`-a
+alatt fut, nem `overflow: hidden`-nel vágva). A mockup külső glow-ja
+(`box-shadow: 0 0 24px`) kimaradt, lásd D-030. Keret nincs a kártyán, szintén
+D-030.
+
+**Commit:** `feat: kártya alap komponens`
+
+---
 
 ## 2026-09-01 – Hibakezelés és üres állapot (`ErrorPanel`, `EmptyState`)
 
@@ -1149,3 +1188,21 @@ megváltoztatja a `fetch` hibaüzenetét, az angol szöveg átcsúszik a felüle
 **Visszavonható?** Igen, egy `if` a `describeError`-ban.
 
 <!-- ÚJ DÖNTÉSEK IDE, ALULRA, NÖVEKVŐ SORSZÁMMAL -->
+
+## D-030 – A `GlowCard` keret és külső glow nélkül, csak accent sávval
+**Dátum:** 2026-09-01
+**Döntés:** A `GlowCard` alapból **nem** kap `subtle` keretet, és a mockup külső
+glow-ját (`box-shadow: 0 0 24px rgba(255,107,53,0.08)`, illetve a sáv
+`0 0 14px`-es fénye) sem próbáljuk utánozni. A kiemelést kizárólag a bal oldali
+3pt-os accent sáv adja.
+**Miért:** A `CLAUDE.md` komponens-táblája „surface1 háttér, subtle border"-t ír, de
+mind az öt elfogadott mockupban **egyetlen kártyán sincs keret** – a `#0A1628`
+felületek mind csupaszok, keret csak inputon, badge-en és a tabsáv tetején van.
+A mockup a mérvadó (D-008). A külső glow pedig színes, elmosott árnyék, amit RN
+Androidon nem renderel (D-005); a keret nélküli, sávval jelölt kártya mindkét
+platformon azonos.
+**Alternatíva:** `bordered` prop a `CLAUDE.md` szövegéhez – de egyetlen mockup sem
+használná, tehát halott kapcsoló lenne. A glow-ra Skia `BlurMask` réteg jöhetne
+szóba; ez egy kártyaháttérhez aránytalan, és a chartokig (S7) a Skia egyébként
+sincs telepítve.
+**Visszavonható?** Igen, prop hozzáadásával, a hívók érintése nélkül.
