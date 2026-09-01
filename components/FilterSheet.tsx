@@ -33,7 +33,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check } from 'lucide-react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
-import { colors, duration, fontSize, glow, letterSpacing, radius, tracking } from '@/constants/theme';
+import { ErrorPanel } from '@/components/ErrorPanel';
+import { colors, duration, fontSize, letterSpacing, radius, tracking } from '@/constants/theme';
 import { useFilterData } from '@/hooks/useFilterData';
 import { usePressed } from '@/hooks/usePressed';
 import { useFilterStore } from '@/store/filterStore';
@@ -166,7 +167,11 @@ export function FilterSheet({ visible, onClose }: FilterSheetProps) {
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
           >
-            {error ? <ErrorPanel message={error} onRetry={reload} /> : null}
+            {error ? (
+              <View className="mb-16">
+                <ErrorPanel message={error} onRetry={reload} variant="inline" />
+              </View>
+            ) : null}
 
             <Section label="Szezon">
               {seasons.length === 0 && loading ? (
@@ -328,30 +333,6 @@ function EmptyRow({ text }: { text: string }) {
   );
 }
 
-function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
-  const button = usePressed();
-
-  return (
-    <View style={styles.errorPanel}>
-      <Text className="flex-1 font-body text-sm text-negative">{message}</Text>
-      <Pressable
-        onPress={onRetry}
-        {...button.pressHandlers}
-        accessibilityRole="button"
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        style={{ opacity: button.pressed ? 0.6 : 1 }}
-      >
-        <Text
-          className="font-condensed text-sm uppercase text-cyan"
-          style={{ letterSpacing: letterSpacing(fontSize.sm, tracking.wide) }}
-        >
-          Újra
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -416,17 +397,5 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: radius.sm,
     backgroundColor: colors.bg.surface3,
-  },
-  errorPanel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    backgroundColor: glow.negative.fill,
-    borderColor: glow.negative.border,
   },
 });

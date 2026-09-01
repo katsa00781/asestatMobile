@@ -52,7 +52,7 @@
 - [x] `hooks/useGameData.ts` – meccsek + fixtures lekérése, `@core/season-tables` + `@core/fetch-all-rows` használatával
 - [x] `hooks/usePlayerData.ts` – szezon-aggregált játékosstatisztikák, `@core/player-stat-mapping` mappinggel
 - [x] Lusta betöltési stratégia: tabonkénti fetch, cache a szűrő élettartamára
-- [ ] Hibakezelés: hálózati hiba → újrapróbálás gombos hibapanel; üres adat → `EmptyState`
+- [x] Hibakezelés: hálózati hiba → újrapróbálás gombos hibapanel; üres adat → `EmptyState`
 
 ---
 
@@ -64,7 +64,7 @@
 - [ ] `components/StatMatrix.tsx` – vízszintesen görgethető statisztikai mátrix **fagyasztott első oszloppal**; iOS és Android görgetés-szinkron ellenőrzése
 - [ ] `components/Badge.tsx` – 7 variáns (cyan / orange / ai / positive / negative / warning / neutral)
 - [ ] `components/SkeletonBlock.tsx` – shimmer betöltés (Reanimated)
-- [ ] `components/EmptyState.tsx` – üres állapot ikonnal és szöveggel
+- [x] `components/EmptyState.tsx` – üres állapot ikonnal és szöveggel
 - [ ] Tap target audit: minden interaktív elem ≥ 44×44pt vagy `hitSlop`-pal kiegészítve
 
 ---
@@ -129,6 +129,51 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-01 – Hibakezelés és üres állapot (`ErrorPanel`, `EmptyState`)
+
+**Mit:** Az adatréteg eddig csak `error` sztringet és `reload()`-ot adott, a
+megjelenítése hiányzott. Két komponens zárja le az S4-et:
+
+- `components/ErrorPanel.tsx` – hibaüzenet + újrapróbálás. Két alakja van:
+  `block` (a tartalom helyén álló panel, 44pt-os másodlagos gombbal a P0 Style
+  Tile szerint) és `inline` (egysoros, listán/sheeten belülre). A `FilterSheet`
+  saját, helyi hibapanelje kikerült, most a közöset használja `inline` alakban –
+  a megjelenése nem változott.
+- `components/EmptyState.tsx` – ikondoboz + ALL CAPS cím + magyarázat. Az ikon
+  cserélhető (alapértelmezés: `Inbox`), gomb nincs rajta (D-028).
+
+Emellett a `useCachedQuery` hibaüzenete magyar lett a leggyakoribb hálózati
+esetre: a `fetch` „Network request failed" szövege helyett „… : nincs kapcsolat
+a szerverrel." Az adatbázishibák változatlanul a Supabase saját üzenetét viszik,
+mert az a diagnózishoz kell.
+
+**Fájlok:** `components/ErrorPanel.tsx` (új), `components/EmptyState.tsx` (új),
+`components/FilterSheet.tsx`, `hooks/useCachedQuery.ts`
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan.
+
+A `describeError` a `hooks/useCachedQuery.ts` **valódi forrásából** kiemelve,
+Node alatt, 6 ellenőrzéssel: `Network request failed`, `Failed to fetch` és
+timeout → magyar kapcsolathiba; PostgREST hibaüzenet változatlanul átmegy;
+nem-`Error` érték és üres üzenet → „ismeretlen hiba".
+
+Metro-oldal: ideiglenesen kitettem mindkét komponenst az `app/index.tsx`
+füstteszt képernyőre, és lefuttattam az `npx expo export`-ot iOS-re és
+Androidra. **Mindkét** Hermes bundle tartalmazza a négy új magyar szöveget
+(„Újrapróbálás", „nincs kapcsolat a szerverrel", a példa cím és leírás). Az
+ideiglenes kitételt visszavontam.
+
+**Nyitva maradt:** Vizuálisan egyik komponens sem futott eszközön – a
+szimulátoron nincs Expo Go, és valódi hibát/üres eredményt egyelőre nincs hol
+kiváltani, mert adatképernyő még nincs. Az S6 első képernyőjénél mindkettőt
+meg kell nézni élőben (különösen a `block` panel margóját 44pt-os gombbal). Az
+`EmptyState` ikondoboza 56×56pt, `radius.xl` – kör alakú ikonháttérhez új
+radius token kellene, ezért maradt lekerekített négyzet.
+
+**Commit:** `feat: hibapanel és üres állapot komponens`
+
+---
 
 ## 2026-09-01 – Lusta betöltési stratégia (közös lekérdezés-cache)
 
@@ -1068,5 +1113,39 @@ minden képernyőn megismételve.
 navigátoron belül** használható: a `useIsFocused` navigációs kontextus nélkül
 hibát dob. Ez ma minden hívási helyre igaz.
 **Visszavonható?** Igen, egy sor a `useCachedQuery`-ben.
+
+## D-028 – Egy `ErrorPanel` két alakkal, az `EmptyState` gomb nélkül
+**Dátum:** 2026-09-01
+**Döntés:** A hibapanel egyetlen komponens `block` és `inline` változattal, az
+üres állapotnak pedig nincs akciógombja.
+**Miért:** A hiba két helyen néz ki máshogy: a képernyő közepén álló panel
+elbírja a 44pt-os gombot, a szűrő sheet listája fölött viszont egy soros
+figyelmeztetés kell, hogy a lista használható maradjon. Ez ugyanaz a fogalom,
+ugyanazzal a `glow.negative` rétegzéssel – két külön komponens duplikálná a
+stílusokat. Az `EmptyState` azért gombtalan, mert az üres eredmény nem hiba:
+nem újrapróbálni kell, hanem szűrőt váltani, azt pedig a fejléc chipje intézi.
+**Alternatíva:** Külön `InlineError` komponens (több fájl, ugyanaz a token
+készlet), illetve `EmptyState` akciógombbal (a gombstílus így két komponensben
+duplikálódna – ha később kell, közös gombkomponens lesz belőle).
+**Következmény:** A `variant` prop nő, ha új környezet jön (pl. StatMatrix
+fejléce alatt). Kettőnél több alaknál érdemes lesz szétszedni.
+**Visszavonható?** Igen, a két ág független.
+
+## D-029 – A hálózati hiba magyar üzenetet kap, az adatbázishiba nem
+**Dátum:** 2026-09-01
+**Döntés:** A `useCachedQuery` a `Network request failed` / `Failed to fetch` /
+timeout mintákra saját magyar mondatot ad („nincs kapcsolat a szerverrel"),
+minden más hibánál a Supabase üzenetét fűzi a magyar címke után.
+**Miért:** A kapcsolathiányt a felhasználó tudja orvosolni, ezért érthető
+magyar mondat kell rá – ez az egyetlen hiba, amit a stáb a lelátón tényleg
+látni fog. A PostgREST hibák viszont fejlesztői hibát jeleznek (rossz
+táblanév, RLS), ott a pontos angol üzenet többet ér, mint egy általános
+„Hiba történt".
+**Alternatíva:** Minden hibát általános magyar mondatra cserélni – a
+hibakeresést vakká tenné; vagy semmit nem fordítani – a leggyakoribb esetben
+angol szöveget mutatna.
+**Következmény:** A mintaillesztés sztringalapú, tehát ha a React Native
+megváltoztatja a `fetch` hibaüzenetét, az angol szöveg átcsúszik a felületre.
+**Visszavonható?** Igen, egy `if` a `describeError`-ban.
 
 <!-- ÚJ DÖNTÉSEK IDE, ALULRA, NÖVEKVŐ SORSZÁMMAL -->

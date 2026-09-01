@@ -82,8 +82,7 @@ export function useCachedQuery<T>({
       })
       .catch((err: unknown) => {
         if (!active) return;
-        const message = err instanceof Error ? err.message : 'Ismeretlen hiba';
-        setError(`${errorLabel}: ${message}`);
+        setError(describeError(err, errorLabel));
       });
 
     return () => {
@@ -106,4 +105,20 @@ export function useCachedQuery<T>({
     error,
     reload,
   };
+}
+
+/**
+ * A hibaüzenetek a `fetch` angol szövegét adnák vissza, ezért a leggyakoribb
+ * hálózati esetet magyarra fordítjuk. Minden más hiba a Supabase saját üzenetét
+ * viszi tovább – az segít a diagnózisban, és nem is jut el a felhasználóig,
+ * ha a lekérdezés helyes.
+ */
+function describeError(err: unknown, label: string): string {
+  const raw = err instanceof Error ? err.message : '';
+
+  if (/network request failed|failed to fetch|network error|timeout/i.test(raw)) {
+    return `${label}: nincs kapcsolat a szerverrel.`;
+  }
+
+  return raw ? `${label}: ${raw}` : `${label}: ismeretlen hiba.`;
 }
