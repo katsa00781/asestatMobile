@@ -61,7 +61,7 @@
 - [x] `components/GlowCard.tsx` – surface1 + subtle border + opcionális accent glow réteg (border + alacsony opacitású háttér, **nem** shadowColor)
 - [x] `components/StatTile.tsx` – label + JetBrains Mono érték + opcionális trend és accent (a webes `StatCard` mobil párja)
 - [x] `components/StackedRow.tsx` – listaelem, függőlegesen csoportosított adatokkal (a `DataTable` sor mobil párja)
-- [ ] `components/StatMatrix.tsx` – vízszintesen görgethető statisztikai mátrix **fagyasztott első oszloppal**; iOS és Android görgetés-szinkron ellenőrzése
+- [x] `components/StatMatrix.tsx` – vízszintesen görgethető statisztikai mátrix **fagyasztott első oszloppal**; iOS és Android görgetés-szinkron ellenőrzése
 - [ ] `components/Badge.tsx` – 7 variáns (cyan / orange / ai / positive / negative / warning / neutral)
 - [ ] `components/SkeletonBlock.tsx` – shimmer betöltés (Reanimated)
 - [x] `components/EmptyState.tsx` – üres állapot ikonnal és szöveggel
@@ -129,6 +129,54 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-01 – Statisztikai mátrix (`StatMatrix`)
+
+**Mit:** Elkészült a `components/StatMatrix.tsx`, a webes `DataTable` mobil
+párja sok oszlop esetére. A komponens a `p0-style-tile.html` „StatMatrix minta"
+blokkját replikálja: surface1 hátterű, `lg` sarkú, `overflow: hidden` doboz,
+benne balra a 108pt széles **fagyasztott** névoszlop (jobb oldali 1pt
+`border.subtle` keret + fekete mélységárnyék), jobbra a `bg.base` hátterű,
+vízszintesen görgethető numerikus terület. A fejlécsor mindkét oldalon 30pt
+magas, `border.hairline` alsó vonallal; az adatsorok 34pt magasak. A
+cellamargó 10pt, az oszloptérköz 16pt, az alapértelmezett oszlopszélesség 36pt
+(oszloponként felülírható, pl. négyjegyű értékhez). Feliratok: Barlow Condensed
+10pt ALL CAPS `text.muted`; nevek: DM Sans 13pt; értékek: JetBrains Mono 13pt,
+`tabular-nums`, jobbra igazítva.
+
+A cellák sima sztringként is megadhatók, de `{ value, tone }` alakban accent
+hangnemet is kaphatnak (a tabella pontkülönbségéhez, a box score kiemeléseihez)
+– a hangnem → szín leképezés a `constants/theme.ts` `accentColor`-jából jön,
+mint a `StackedRow`-ban.
+
+A fejlécfeliratok betűköze `tracking.label` (0.12em), nem a mockup 0.1em-je –
+ugyanaz az indok, mint a D-033-ban.
+
+**Fájlok:** `components/StatMatrix.tsx` (új)
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan.
+
+Metro-oldal: ideiglenesen kitettem az `app/index.tsx` füstteszt képernyőre egy
+hat oszlopos, három soros mátrixot (köztük szélesített oszlop és mindhárom
+hangnem), majd lefuttattam az `npx expo export`-ot iOS-re és Androidra.
+**Mindkét** Hermes bundle tartalmazza a feliratokat, a `tabular-nums`
+beállítást és a `boxShadow` értéket. Az ékezetes sztringeket UTF-16-ban is
+kerestem (lásd az előző bejegyzést). Az ideiglenes kitételt visszavontam.
+
+**Nyitva maradt:** Eszközön még nem futott. Ellenőrizni kell (a) a két oszlop
+sorainak egy vonalban maradását nagy rendszer-betűméret mellett – a fix
+sormagasság miatt a szöveg inkább vágódik, mint hogy elcsússzon, de ez
+vizuálisan hitelesítendő; (b) a `boxShadow` renderelését Androidon (D-035);
+(c) a vízszintes görgetés viselkedését a képernyő függőleges görgetőjében,
+Androidon is. A mátrix sorai szándékosan nem nyomhatók (a mockupban sincs
+állapotuk), így a 44pt-os érintési szabály nem érinti őket – ha az S6-ban
+sorra kattintás kell, az a magasságot is újratárgyalja. Képernyőolvasó a két
+oszlopot külön fatörzsként olvassa, ezért a sor összefüggése elveszik – ha
+kell, sor-szintű `accessibilityLabel` a fagyasztott cellára a megoldás.
+
+**Commit:** `feat: statisztikai mátrix komponens`
+
+---
 
 ## 2026-09-01 – Listasor (`StackedRow`)
 
@@ -1347,3 +1395,39 @@ szabályok), és egyetlen felirattípusért nem indokolt bővíteni a skálát.
 **Alternatíva:** `tracking.wide` (0.08em = 0.88pt) – az a gombfelirat tokenje és
 még messzebb esik; vagy új `tracking` érték – ehhez a te jóváhagyásod kellene.
 **Visszavonható?** Igen, egy sor a `StackedRow` `headerLabel` stílusában.
+
+## D-034 – A mátrix sormagassága fix szám, nem a tartalom magassága
+**Dátum:** 2026-09-01
+**Döntés:** A `StatMatrix` fejléc- és adatsorai fix magasságúak (30pt / 34pt),
+és a szövegek explicit `lineHeight`-ot kapnak; a magasság nem a tartalomból
+adódik.
+**Miért:** A fagyasztott névoszlop és a görgethető számterület két külön
+nézetfa, egymás magasságáról nem tudnak. Ha a magasságot a tartalom adná, a
+DM Sans 13pt-os név és a JetBrains Mono 13pt-os szám eltérő sormagassága
+soronként pár tized ponttal elcsúsztatná a két oldalt, és a hiba a lista alján
+halmozódna – pont ez a fagyasztott oszlopos táblázatok klasszikus hibája. A
+mockup 8+8pt margója és a szövegsor együtt épp ezt a 30 / 34pt-ot adja ki.
+**Alternatíva:** `onLayout`-tal soronként megmérni a magasabb oldalt, és a
+másikat arra állítani – egy extra render kör soronként, mindezt azért, hogy a
+mockup fix magasságát kiszámoljuk. Vagy egyetlen sorban tartani a nevet és a
+számokat (nincs fagyasztott oszlop), de akkor a név elgörög a képernyőről.
+**Következmény:** Nagy rendszer-betűméretnél a sor nem nő, a szöveg vágódik.
+Ez tudatos csere: az elcsúszott mátrix olvashatatlan, a vágott név nem.
+**Visszavonható?** Igen, két konstans a `StatMatrix`-ben.
+
+## D-035 – A fagyasztott oszlop `boxShadow`-t kap, ez kivétel a D-005 alól
+**Dátum:** 2026-09-01
+**Döntés:** A fagyasztott oszlop jobb oldali mélységárnyéka a mockup szerinti
+`boxShadow: '2px 0px 8px rgba(0,0,0,0.4)'`, nem accent-réteg és nem
+`shadowColor` + `elevation` páros.
+**Miért:** A D-005 a **színes** glow-t tiltja, mert az Androidon nem
+renderelődik – ez viszont fekete mélységárnyék, amit az RN 0.76 óta létező
+`boxShadow` prop mindkét platformon egységesen rajzol (a projekt az új
+architektúrán fut, RN 0.86). A `shadowColor`/`elevation` páros itt rosszabb:
+az `elevation` körbe rajzol, nem csak jobbra, és a nézet z-sorrendjét is
+átírja. Az árnyék csak mélységjel, az elválasztást az 1pt-os `border.subtle`
+keret adja – ha egy régi Androidon nem renderelődne, a mátrix attól még helyes.
+**Alternatíva:** `react-native-svg` gradienssáv az árnyék helyén – működne, de
+egy SVG réteg minden mátrixban azért, amit egy stílussor megold; vagy árnyék
+nélkül, csak kerettel – a mockuptól való eltérés lenne.
+**Visszavonható?** Igen, egy sor a `StatMatrix` `frozen` stílusában.
