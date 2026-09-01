@@ -59,7 +59,7 @@
 ## S5 – Közös UI komponensek
 
 - [x] `components/GlowCard.tsx` – surface1 + subtle border + opcionális accent glow réteg (border + alacsony opacitású háttér, **nem** shadowColor)
-- [ ] `components/StatTile.tsx` – label + JetBrains Mono érték + opcionális trend és accent (a webes `StatCard` mobil párja)
+- [x] `components/StatTile.tsx` – label + JetBrains Mono érték + opcionális trend és accent (a webes `StatCard` mobil párja)
 - [ ] `components/StackedRow.tsx` – listaelem, függőlegesen csoportosított adatokkal (a `DataTable` sor mobil párja)
 - [ ] `components/StatMatrix.tsx` – vízszintesen görgethető statisztikai mátrix **fagyasztott első oszloppal**; iOS és Android görgetés-szinkron ellenőrzése
 - [ ] `components/Badge.tsx` – 7 variáns (cyan / orange / ai / positive / negative / warning / neutral)
@@ -129,6 +129,49 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-01 – KPI csempe (`StatTile`)
+
+**Mit:** Elkészült a `components/StatTile.tsx`, a webes `StatCard` mobil párja.
+A csempe a `GlowCard`-ra épül (`corner="xl"`, 14pt padding, opcionális accent
+sáv), és hozzáteszi a mockup 96pt-os minimum magasságát, a fenti label +
+változásjelző sort, valamint a 28pt-os JetBrains Mono SemiBold értéket 8pt
+felső margóval, `tracking.tight` betűközzel és `tabular-nums`-szal.
+
+A trend külön `tone` mezőt kapott (`positive` / `negative` / `neutral`), mert a
+mockupban a szín **nem** az irányból következik: a csökkenő kapott pont zöld
+(▼ 2.4), a növekvő eldobott labda piros (▲ 1.8). Az irányt és a színt ezért a
+hívó adja meg egymástól függetlenül.
+
+A mockup ▲ / ▼ / ▬ karakterei helyett lucide ikon rajzolja a jelet – a
+csomagolt betűkészletekben nincsenek meg ezek a glifák, lásd D-031.
+
+**Fájlok:** `components/StatTile.tsx` (új)
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan.
+
+Betűkészlet-ellenőrzés: a három TTF `cmap` tábláját kiolvasva a U+25B2 / U+25BC
+/ U+25AC / U+25BE **egyikben sincs** benne (a JetBrains Mono és a DM Sans
+subset 229, illetve 222 kódpontot tartalmaz). A U+2191 / U+2193 nyíl megvan a
+monóban és a DM Sans-ban, a Barlow Condensedben nem.
+
+Metro-oldal: ideiglenesen kitettem négy csempét az `app/index.tsx` füstteszt
+képernyőre (cyan növekvő, orange csökkenő-de-pozitív, positive változatlan, és
+egy sáv nélküli nyomható), majd lefuttattam az `npx expo export`-ot iOS-re és
+Androidra. **Mindkét** Hermes bundle tartalmazza a csempék feliratait, a három
+akadálymentességi irányszöveget („növekedés", „csökkenés", „változatlan") és a
+`tabular-nums` beállítást. Az ideiglenes kitételt visszavontam.
+
+**Nyitva maradt:** Eszközön még nem futott: a lucide háromszög optikai mérete
+(9pt, kitöltve) a 11pt-os mono szöveg mellett vizuálisan nincs hitelesítve, ezt
+az S6 „Ma" képernyőjén kell megnézni, Androidon is. Az `app/index.tsx`
+ideiglenes `FilterChip`-jében maradt egy `▾` karakter, ami ugyanezen okból
+Androidon tofuként jelenhet meg – az S6-ban a végleges szűrő-chipnél lucide
+`ChevronDown`-ra kell cserélni (a füstteszt képernyő addig is eldobásra kerül).
+
+**Commit:** `feat: KPI csempe komponens`
+
+---
 
 ## 2026-09-01 – Kártya alap (`GlowCard`)
 
@@ -1206,3 +1249,19 @@ használná, tehát halott kapcsoló lenne. A glow-ra Skia `BlurMask` réteg jö
 szóba; ez egy kártyaháttérhez aránytalan, és a chartokig (S7) a Skia egyébként
 sincs telepítve.
 **Visszavonható?** Igen, prop hozzáadásával, a hívók érintése nélkül.
+
+## D-031 – A trendjel lucide ikon, nem ▲ / ▼ / ▬ karakter
+**Dátum:** 2026-09-01
+**Döntés:** A `StatTile` változásjelzője lucide `Triangle` (kitöltve, lefelé
+180°-kal forgatva) és `Minus` ikon, nem a mockup ▲ / ▼ / ▬ karaktere.
+**Miért:** A repóba csomagolt három betűcsalád mind **subset**: a `cmap`
+táblájuk 222–229 kódpontot tartalmaz, és a U+25B2 / U+25BC / U+25AC (valamint a
+U+25BE) egyikben sincs benne. Hiányzó glifánál iOS csendben rendszerbetűre vált
+– más szélességgel, elrontva a numerikus igazítást –, Android viszont tofut
+rajzol. A kitöltött háromszög alakja ikonnal pontosan hozható, és a mérete a
+`size` proppal a 11pt-os szöveghez igazítható.
+**Alternatíva:** (a) teljes, nem subsetelt betűfájlok – három fájl mérete
+nőne meg jelentősen egyetlen három glifáért; (b) a monóban meglévő U+2191 /
+U+2193 nyíl – ez viszont már **más jel**, nem a jóváhagyott mockupé (D-008).
+**Visszavonható?** Igen, a `TrendMark` egy függvénye; ha valaha teljes
+betűkészlet kerül be, visszaírható a karakter.
