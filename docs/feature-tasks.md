@@ -51,7 +51,7 @@
 - [x] `components/FilterSheet.tsx` – szezon/csapat választó bottom sheet a mockup szerint; Android hardveres back kezelése
 - [x] `hooks/useGameData.ts` – meccsek + fixtures lekérése, `@core/season-tables` + `@core/fetch-all-rows` használatával
 - [x] `hooks/usePlayerData.ts` – szezon-aggregált játékosstatisztikák, `@core/player-stat-mapping` mappinggel
-- [ ] Lusta betöltési stratégia: tabonkénti fetch, cache a store-ban a szűrő élettartamára
+- [x] Lusta betöltési stratégia: tabonkénti fetch, cache a szűrő élettartamára
 - [ ] Hibakezelés: hálózati hiba → újrapróbálás gombos hibapanel; üres adat → `EmptyState`
 
 ---
@@ -129,6 +129,75 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-01 – Lusta betöltési stratégia (közös lekérdezés-cache)
+
+**Mit:** A három adathook (`useFilterData`, `useGameData`, `usePlayerData`)
+ugyanazt a mintát ismételte – modulszintű cache, `loading`, `error`, `attempt`
+számláló, „még él-e a komponens" flag –, ezért ez egy helyre került. Az új
+`lib/query-cache.ts` adja a kulcsolt cache-t (deduplikálás, hibás kérés
+kiesése, `invalidate`, `clearAllQueryCaches`), az új `hooks/useCachedQuery.ts`
+pedig a köré épülő betöltés-, hiba- és újrapróbálás-kezelést. A három hook így
+összesen 111 sorral rövidebb, és a viselkedésük egységes.
+
+Két új viselkedés is bekerült, ezek adják a `CLAUDE.md` „lusta betöltés"
+elvárását:
+
+1. **A háttérben lévő tab nem tölt.** A `useCachedQuery` a `useIsFocused`-öt
+   nézi: szezon- vagy csapatváltáskor csak a látható képernyő indít
+   lekérdezést, a többi akkor, amikor a felhasználó odalép (D-027).
+2. **Kijelentkezéskor ürül a cache.** Az `initAuth` figyeli a felhasználó
+   azonosítóját, és váltáskor (kijelentkezés is az) kiüríti az összes cache-t,
+   nehogy a következő belépő az előző adatait lássa. A token frissítése nem
+   ürít.
+
+Emellett a hook kulcshoz köti az adatot: amíg az új szűrőhöz nincs eredmény,
+üres értéket ad vissza, nem az előző szezonét.
+
+**Fájlok:** `lib/query-cache.ts` (új), `hooks/useCachedQuery.ts` (új),
+`hooks/useFilterData.ts`, `hooks/useGameData.ts`, `hooks/usePlayerData.ts`,
+`store/authStore.ts`
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan.
+
+A `lib/query-cache.ts` **valódi kódja** Node alatt, 9 ellenőrzéssel:
+deduplikálás (két párhuzamos `load` → egy hálózati hívás, azonos referencia),
+cache találat hívás nélkül, másik kulcs → új hívás, hibás kérés nem ragad bent,
+`invalidate` után új hívás, `clearAllQueryCaches` mindkét cache-t üríti.
+
+A `useCachedQuery` viselkedése a `usePlayerData` valódi kódján keresztül,
+dublőrözött Supabase-szel (kérésszámláló) és dublőrözött fókusszal, 19
+ellenőrzéssel: hidratálás előtt nincs kérés; háttérben lévő tabnál nincs kérés;
+fókuszba kerülve elindul; hálózati hiba → magyar üzenet + üres lista + nincs
+töltés; `reload()` újra kér és törli a hibát; azonos szűrőre újramountolva
+nincs hálózat; háttérben történt szezonváltás nem indít kérést **és nem mutat
+régi adatot**; fókusz után az új szűrőre fut a kérés; korábbi szezonra
+visszaváltva cache-ből jön; `clearAllQueryCaches` után új kérés indul.
+
+Éles Supabase-szel mindhárom hook: a szűrő 5 szezont és 16 csapatot ad, az
+alapértelmezés 2025/2026 + Atomerőmű SE; a meccsek 58 sor, 40-18-as mérleg,
+89.8 / 80.7 átlagpont; a játékoslista **változatlanul** 13 fő, élen BENKE
+Szilárd 15.0 PPG / 3.3 RPG / 3.3 APG / 31.5 perc / 16.9 értékelés, TS% 54.8,
+eFG% 50.7 – a refaktor tehát nem mozdított számot.
+
+Metro-oldal: ideiglenesen bekötöttem mindhárom hookot az `app/index.tsx`
+füstteszt képernyőre, és lefuttattam az `npx expo export`-ot iOS-re és
+Androidra. **Mindkét** Hermes bundle tartalmazza az új réteget és a hookokat
+(`seasons+teams` cache kulcs, `player_season_stats_by_season`,
+`league_fixtures`, valamint UTF-16-ban mindhárom magyar hibaüzenet és a
+„Dobóhátvéd" pozíciónév). Az ideiglenes bekötést visszavontam.
+
+**Nyitva maradt:** Szimulátoron ez nem futott: az Expo Go nincs telepítve a
+gép szimulátorára, és mentett session nélkül az app a bejelentkezési képernyőn
+állna meg, a hookok tehát nem is renderelnének. A fókuszfüggő betöltés
+egyébként is csak akkor válik láthatóvá, amikor tényleg van több tab – az S6
+tab layout után ezt vizuálisan is ellenőrizni kell (szezonváltás után csak a
+látható tab indítson kérést). A cache-nek nincs elévülése: amíg a szűrő nem
+változik, csak a `reload()` hoz friss adatot (D-026).
+
+**Commit:** `feat: közös lekérdezés-cache és lusta betöltés`
+
+---
 
 ## 2026-09-01 – Szezon-aggregált játékosstatisztikák (`usePlayerData`)
 
@@ -963,5 +1032,41 @@ tartalmaz; az éles adatbázis viszont kódot tárol (`2-3`, `5-4`), amit a
 ugyanannak kell hívni, különben a stáb két különböző szót lát ugyanarra.
 **Alternatíva:** A mockup szavai – szebbek, de sehol máshol nem léteznek.
 **Visszavonható?** Igen, egy fájl öt sora.
+
+## D-026 – A lekérdezés-cache modulszintű, nem Zustand store
+**Dátum:** 2026-09-01
+**Döntés:** A letöltött adat a `lib/query-cache.ts` modulszintű `Map`-jeiben ül
+(hookonként egy cache, `szezon:csapat` kulccsal), nem Zustand store-ban, pedig
+a feladatsor „cache a store-ban"-t írt. Elévülés (TTL) nincs: az adat a szűrő
+váltásáig vagy a `reload()`-ig érvényes, kijelentkezéskor pedig ürül.
+**Miért:** Ez nem UI state – egyetlen komponens sem iratkozik fel rá
+közvetlenül, a képernyők a hookok visszatérési értékét nézik. Store-ként minden
+lekérdezés minden feliratkozót újrarenderelne, cserébe semmit nem adna a
+`Map`-hez képest. A TTL-t azért hagytam ki, mert találgatás lenne, hogy meccs
+közben 1 vagy 5 perc a jó – a képernyők úgyis kapnak lehúzásos frissítést
+(S6), az pedig a `reload()`-ot hívja.
+**Alternatíva:** Negyedik Zustand store az adatnak (D-020 már elvetette), vagy
+React Query – az utóbbi új függőség, és a `CLAUDE.md` kifejezetten tiltja.
+**Következmény:** Ha az app órákig nyitva marad ugyanazon a szűrőn, a
+felhasználó addig a belépéskori adatot látja, amíg nem frissít kézzel.
+**Visszavonható?** Igen, a TTL néhány sor a `createQueryCache`-ben.
+
+## D-027 – A háttérben lévő tab nem tölt újra, csak fókuszba kerülve
+**Dátum:** 2026-09-01
+**Döntés:** A `useCachedQuery` a `useIsFocused()`-öt (expo-router, nem új
+csomag) nézi, és csak fókuszban lévő képernyőn indít lekérdezést. Szűrőváltás
+után a háttérben lévő tabok kérése addig vár, amíg a felhasználó oda nem lép.
+**Miért:** Az Expo Router a meglátogatott tabokat mountolva tartja, így egy
+szezonváltás egyszerre 3-5 lekérdezést indítana el olyan képernyőkre, amelyeket
+a felhasználó lehet, hogy meg sem néz – mobilneten ez fizetett adat és lassabb
+válasz annak a tabnak, amit tényleg néz. Ez pontosan a `CLAUDE.md` „mobilon
+soha ne tölts be mindent" szabálya.
+**Alternatíva:** Minden mountolt képernyő azonnal frissít – egyszerűbb, de
+pazarló; vagy a képernyők maguk hívnak `useFocusEffect`-et – ugyanaz a logika
+minden képernyőn megismételve.
+**Következmény:** Minden adathook (és a rájuk épülő `FilterSheet`) **csak
+navigátoron belül** használható: a `useIsFocused` navigációs kontextus nélkül
+hibát dob. Ez ma minden hívási helyre igaz.
+**Visszavonható?** Igen, egy sor a `useCachedQuery`-ben.
 
 <!-- ÚJ DÖNTÉSEK IDE, ALULRA, NÖVEKVŐ SORSZÁMMAL -->

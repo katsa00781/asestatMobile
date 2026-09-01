@@ -5,15 +5,18 @@
  * A szűrőt a hook maga olvassa a `filterStore`-ból – a képernyőknek nem kell
  * propként továbbadniuk. Amíg a store nem hidratált, nem indul lekérdezés.
  *
- * A lekért adat a szűrőpáronként (`szezon:csapat`) modulszintű cache-be kerül,
- * mint a `useFilterData`-nál (D-014): tabváltásnál nem fut újra a hálózat.
+ * A lekért adat szűrőpáronként (`szezon:csapat`) cache-elődik, a betöltés- és
+ * hibakezelést a `useCachedQuery` végzi: tabváltásnál nem fut újra a hálózat,
+ * és a háttérben lévő tab nem tölt újra szűrőváltáskor (D-020, D-027).
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 
 import { fetchAllRows } from '@core/fetch-all-rows';
 
-import { supabase } from '@/lib/supabase';
+import { useCachedQuery } from '@/hooks/useCachedQuery';
 import { useFilterData } from '@/hooks/useFilterData';
+import { createQueryCache, filterKey } from '@/lib/query-cache';
+import { supabase } from '@/lib/supabase';
 import { useFilterStore } from '@/store/filterStore';
 import type { Fixture, HomeAway, GameResult, TeamAggregate, TeamGame } from '@/types/games';
 
@@ -47,101 +50,55 @@ interface GameDataPayload {
   fixtures: Fixture[];
 }
 
-const cache = new Map<string, Promise<GameDataPayload>>();
+const EMPTY_PAYLOAD: GameDataPayload = { games: [], fixtures: [] };
+
+const cache = createQueryCache<GameDataPayload>();
 
 export function useGameData(): GameDataResult {
-  const [games, setGames] = useState<TeamGame[]>([]);
-  const [fixtures, setFixtures] = useState<Fixture[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-
   const hydrated = useFilterStore((state) => state.hydrated);
   const seasonId = useFilterStore((state) => state.selectedSeasonId);
   const teamId = useFilterStore((state) => state.selectedTeamId);
+
   // A fixtures csak csapat-azonosítót tárol, a nevek a szűrő listájából jönnek.
   const {
     teams,
-    loading: filterLoading,
     error: filterError,
     reload: reloadFilter,
   } = useFilterData();
 
-  // Amíg a szűrő listája tölt, még nem tudjuk, lesz-e mit lekérdezni; ha viszont
-  // elhasalt, nincs mire várni – különben a képernyő örökre töltésben ragadna.
-  const waitingForFilter = !hydrated || filterLoading;
-  const canFetch = hydrated && seasonId !== null && teamId !== null && teams.length > 0;
+  // Csapatnevek nélkül a fixture-öknek nem lenne ellenfele, ezért a szűrő
+  // listájára is várunk.
+  const canFetch = hydrated && teams.length > 0;
 
-  useEffect(() => {
-    if (!hydrated || !seasonId || !teamId || teams.length === 0) return;
-
-    let active = true;
-    setLoading(true);
-    setError(null);
-
-    loadGameData(seasonId, teamId, teams)
-      .then((data) => {
-        if (!active) return;
-        setGames(data.games);
-        setFixtures(data.fixtures);
-      })
-      .catch((err: unknown) => {
-        if (!active) return;
-        const message = err instanceof Error ? err.message : 'Ismeretlen hiba';
-        setError(`A meccsek betöltése sikertelen: ${message}`);
-        setGames([]);
-        setFixtures([]);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [hydrated, seasonId, teamId, teams, attempt]);
+  const { data, loading, error, reload: reloadGames } = useCachedQuery({
+    cache,
+    key: canFetch && seasonId && teamId ? filterKey(seasonId, teamId) : null,
+    // Csak `key !== null` esetén hívódik meg; a guard a típusszűkítésért van.
+    fetcher: () =>
+      seasonId && teamId ? fetchGameData(seasonId, teamId, teams) : Promise.resolve(EMPTY_PAYLOAD),
+    empty: EMPTY_PAYLOAD,
+    errorLabel: 'A meccsek betöltése sikertelen',
+  });
 
   const reload = useCallback(() => {
-    if (seasonId && teamId) cache.delete(cacheKey(seasonId, teamId));
     // A csapatnevek is a szűrő hookjából jönnek: egy újrapróbálás gomb mindkettőt
     // újratölti, különben egy elhasalt csapatlista után sosem lenne fixture név.
     reloadFilter();
-    setAttempt((value) => value + 1);
-  }, [seasonId, teamId, reloadFilter]);
+    reloadGames();
+  }, [reloadFilter, reloadGames]);
 
   return {
-    games,
-    fixtures,
-    nextFixture: fixtures[0] ?? null,
-    lastGame: games[0] ?? null,
-    teamStats: aggregate(games),
-    loading: waitingForFilter || (canFetch && loading),
+    games: data.games,
+    fixtures: data.fixtures,
+    nextFixture: data.fixtures[0] ?? null,
+    lastGame: data.games[0] ?? null,
+    teamStats: aggregate(data.games),
+    // Ha a szűrő listája elhasalt, nincs mire várni – különben a képernyő
+    // örökre töltésben ragadna egy olyan kérésre, ami el sem indul.
+    loading: filterError === null && loading,
     error: error ?? filterError,
     reload,
   };
-}
-
-function cacheKey(seasonId: string, teamId: string): string {
-  return `${seasonId}:${teamId}`;
-}
-
-function loadGameData(
-  seasonId: string,
-  teamId: string,
-  teams: { id: string; name: string }[],
-): Promise<GameDataPayload> {
-  const key = cacheKey(seasonId, teamId);
-  const cached = cache.get(key);
-  if (cached) return cached;
-
-  const request = fetchGameData(seasonId, teamId, teams).catch((err: unknown) => {
-    // A sikertelen kérés ne ragadjon bent, különben a `reload()` ugyanazt a
-    // hibát adná vissza örökre.
-    cache.delete(key);
-    throw err;
-  });
-  cache.set(key, request);
-  return request;
 }
 
 async function fetchGameData(

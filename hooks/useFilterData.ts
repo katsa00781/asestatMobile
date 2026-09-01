@@ -6,12 +6,14 @@
  * azonosítót tartalmazzon: ha nincs mentett választás, vagy a mentett elem
  * időközben eltűnt az adatbázisból, alapértelmezésre esik vissza.
  *
- * A két lista az app élettartamára cache-elődik (modulszintű ígéret), mert a
- * szezonok és a csapatok ritkán változnak, viszont több képernyő is kéri őket.
- * A `reload()` a hibapanel újrapróbálás gombjának való.
+ * A két lista az app élettartamára cache-elődik (egyetlen, szűrőfüggetlen
+ * kulcs), mert a szezonok és a csapatok ritkán változnak, viszont több képernyő
+ * is kéri őket. A `reload()` a hibapanel újrapróbálás gombjának való.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
+import { useCachedQuery } from '@/hooks/useCachedQuery';
+import { createQueryCache } from '@/lib/query-cache';
 import { supabase } from '@/lib/supabase';
 import { useFilterStore } from '@/store/filterStore';
 import type { Season, Team } from '@/types/filters';
@@ -27,43 +29,27 @@ interface FilterData {
   teams: Team[];
 }
 
-let cachedRequest: Promise<FilterData> | null = null;
+/** A listák nem szűrőfüggők, ezért egyetlen, állandó kulcson ülnek. */
+const CACHE_KEY = 'seasons+teams';
+
+const EMPTY_FILTER_DATA: FilterData = { seasons: [], teams: [] };
+
+const cache = createQueryCache<FilterData>();
 
 export function useFilterData() {
-  const [seasons, setSeasons] = useState<Season[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-
   const hydrated = useFilterStore((state) => state.hydrated);
   const selectedSeasonId = useFilterStore((state) => state.selectedSeasonId);
   const selectedTeamId = useFilterStore((state) => state.selectedTeamId);
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError(null);
+  const { data, loading, error, reload } = useCachedQuery({
+    cache,
+    key: CACHE_KEY,
+    fetcher: fetchFilterData,
+    empty: EMPTY_FILTER_DATA,
+    errorLabel: 'A szűrők betöltése sikertelen',
+  });
 
-    loadFilterData()
-      .then((data) => {
-        if (!active) return;
-        setSeasons(data.seasons);
-        setTeams(data.teams);
-      })
-      .catch((err: unknown) => {
-        if (!active) return;
-        const message = err instanceof Error ? err.message : 'Ismeretlen hiba';
-        setError(`A szűrők betöltése sikertelen: ${message}`);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [attempt]);
+  const { seasons, teams } = data;
 
   // Az alapértelmezés beállítása megvárja a store visszaolvasását, különben
   // felülírná a felhasználó korábban mentett választását.
@@ -80,11 +66,6 @@ export function useFilterData() {
     }
   }, [hydrated, seasons, teams]);
 
-  const reload = useCallback(() => {
-    cachedRequest = null;
-    setAttempt((value) => value + 1);
-  }, []);
-
   return {
     seasons,
     teams,
@@ -94,18 +75,6 @@ export function useFilterData() {
     error,
     reload,
   };
-}
-
-function loadFilterData(): Promise<FilterData> {
-  if (!cachedRequest) {
-    cachedRequest = fetchFilterData().catch((err: unknown) => {
-      // A sikertelen kérés ne ragadjon bent a cache-ben, különben a
-      // `reload()` ugyanazt a hibát adná vissza örökre.
-      cachedRequest = null;
-      throw err;
-    });
-  }
-  return cachedRequest;
 }
 
 async function fetchFilterData(): Promise<FilterData> {

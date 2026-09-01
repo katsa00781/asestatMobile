@@ -9,6 +9,7 @@ import { AppState } from 'react-native';
 import type { AuthError, Session, User } from '@supabase/supabase-js';
 import { create } from 'zustand';
 
+import { clearAllQueryCaches } from '@/lib/query-cache';
 import { supabase } from '@/lib/supabase';
 
 interface AuthState {
@@ -48,12 +49,23 @@ export const useAuthStore = create<AuthState>((set) => ({
  */
 export function initAuth(): () => void {
   const setState = useAuthStore.setState;
+  // Az utoljára látott felhasználó – ha változik, a letöltött adat már valaki
+  // másé, ki kell dobni.
+  let currentUserId: string | null = null;
 
   void supabase.auth.getSession().then(({ data }) => {
     setState({ session: data.session, user: data.session?.user ?? null, hydrated: true });
   });
 
   const { data: authSubscription } = supabase.auth.onAuthStateChange((_event, session) => {
+    const userId = session?.user.id ?? null;
+    if (userId !== currentUserId) {
+      // Kijelentkezéskor és felhasználóváltáskor is: a következő belépő ne az
+      // előző szűrő szerinti, letöltött adatot lássa. A token frissítése nem
+      // változtat felhasználót, tehát nem ürít.
+      clearAllQueryCaches();
+      currentUserId = userId;
+    }
     setState({ session, user: session?.user ?? null, hydrated: true });
   });
 
