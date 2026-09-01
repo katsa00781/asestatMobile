@@ -50,7 +50,7 @@
 - [x] `hooks/useFilterData.ts` – `seasons` + `teams` betöltés, alapértelmezett szezon az `is_current`-ből
 - [x] `components/FilterSheet.tsx` – szezon/csapat választó bottom sheet a mockup szerint; Android hardveres back kezelése
 - [x] `hooks/useGameData.ts` – meccsek + fixtures lekérése, `@core/season-tables` + `@core/fetch-all-rows` használatával
-- [ ] `hooks/usePlayerData.ts` – szezon-aggregált játékosstatisztikák, `@core/player-stat-mapping` mappinggel
+- [x] `hooks/usePlayerData.ts` – szezon-aggregált játékosstatisztikák, `@core/player-stat-mapping` mappinggel
 - [ ] Lusta betöltési stratégia: tabonkénti fetch, cache a store-ban a szűrő élettartamára
 - [ ] Hibakezelés: hálózati hiba → újrapróbálás gombos hibapanel; üres adat → `EmptyState`
 
@@ -129,6 +129,65 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-01 – Szezon-aggregált játékosstatisztikák (`usePlayerData`)
+
+**Mit:** Elkészült a `hooks/usePlayerData.ts`: a kiválasztott szezon és csapat
+játékosainak szezonösszesítése a `player_season_stats_by_season` view-ból, a
+sor → `PlayerStats` konverzió a `@core/player-stat-mapping`
+`mapSupabaseStatToPlayerStats()`-ával (a TS% és az eFG% így az összegzett
+dobásokból számolódik, nem meccsenkénti százalékok átlagából). A hook a core
+alakot kiegészíti a képernyőnek kellő származtatott mezőkkel: `averages`
+(PPG / RPG / APG / perc / labdaszerzés / eladott labda / értékelés) és
+`positionLabel` (magyar pozíciónév a `@core/positions`
+`resolvePrimaryPosition()`-jéből). A ponthatékonyság és a védekezési index a
+webprojekt `useGameData`-jával azonos képlettel megy, hogy a két felület
+ugyanazt a számot mutassa.
+
+A szűrőt a hook maga olvassa a `filterStore`-ból, szűrőpáronként
+(`szezon:csapat`) cache-el, és `@core/fetch-all-rows`-szal lapoz – ugyanaz a
+minta, mint a `useGameData`-nál (D-020). Aki nulla meccsen szerepel, kimarad a
+listából; a sorrend meccsenkénti pontátlag szerint csökkenő.
+
+**Fájlok:** `hooks/usePlayerData.ts`, `types/players.ts`,
+`data/position-labels.ts`
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan.
+
+A hook **valódi kódját** Node alatt lefuttattam (natív TS type stripping +
+egyedi ESM loader az alias-okra; a `react`, a `filterStore` és az AsyncStorage
+dublőrözve, de **éles** Supabase klienssel):
+(1) 2025/2026 + Atomerőmű SE → 13 játékos, élen BENKE Szilárd 15.0 PPG /
+3.3 RPG / 3.3 APG / 31.5 perc / 16.9 értékelés, TS% 54.8, eFG% 50.7;
+(2) 2024/2025 + ASE → 15 játékos, élen CHANDLER III 21.3 PPG;
+(3) 2026/2027 (üres szezon) és nem létező azonosítók → üres lista, hiba nélkül;
+(4) a sorrend tényleg PPG szerinti, nem összpont szerinti (EILINGSFELD 663
+összponttal a negyedik, BLUIETT és EDWIN kevesebb összponttal elé kerül).
+
+Dublőrözött Supabase-szel a peremesetek: hidratálás előtt nem indul lekérdezés;
+hálózati hiba → `loading: false` + magyar hibaüzenet + üres lista; a hibás
+kérés nem ragad a cache-ben, a `reload()` újra próbálkozik és törli a hibát;
+ugyanarra a szűrőpárra újramountolva nincs új hálózati kérés, szezonváltásra
+viszont igen.
+
+Metro-oldali feloldás: ideiglenesen bekötöttem a hookot az `app/index.tsx`
+füstteszt képernyőre, lefuttattam az `npx expo export`-ot iOS-re és Androidra,
+és **mindkét** bundle-ben megtaláltam a lekérdezést és a mappinget
+(`player_season_stats_by_season`, `avg_valuation`,
+`total_free_throw_attempted`, `positionLabel`, valamint UTF-16-ban a
+„Dobóhátvéd" és a magyar hibaüzenet). Az ideiglenes bekötést visszavontam.
+
+**Nyitva maradt:** A meccsenkénti bontás (`gameHistory`) szándékosan üres –
+külön hook tölti majd a játékos részletei képernyőn (D-024). A view
+`games_played` értékei a 2025/2026 szezonban 50–56 között vannak, ami a
+`useGameData`-nál már jelzett **szezonkeveredés** következménye
+(`games.season_id`, webprojekt-feladat) – a mobil app csak olvas, az átlagok
+addig két szezonra átlagolnak. Az S6 képernyők még nem fogyasztják a hookot,
+így szimulátoron vizuálisan még nem futott.
+
+**Commit:** `feat: szezon-aggregált játékosstatisztikák lekérése`
+
+---
 
 ## 2026-08-31 – Meccsek és fixtures (`useGameData`)
 
@@ -861,5 +920,48 @@ csapat.
 **Alternatíva:** Séma-bővítés a weben (`game_time` oszlop + scraper) – a mobil
 app nem ír sémát, ez webprojekt-feladat. Ha megvan, itt egy mezőt kell hozzáadni.
 **Visszavonható?** Igen, ha az adat megjelenik.
+
+## D-023 – A `is_active` a view-ból jön, nem külön `players` lekérdezésből
+**Dátum:** 2026-09-01
+**Döntés:** A játékos aktív státusza a `player_season_stats_by_season` view
+`is_active` mezője. A webprojekt ezt felülírja egy külön `players` lekérdezéssel
+(`isActiveOverride`), a mobil app nem.
+**Miért:** A view **tartalmazza** az `is_active` oszlopot, és élesben
+összehasonlítva a `players` táblával a 2025/2026 (13 sor) és a 2024/2025 (15 sor)
+ASE-keretben **nulla eltérés** volt. Egy második lekérdezés mobilneten fizetett
+kérés egy olyan mezőért, amit már megkaptunk.
+**Alternatíva:** A webes override átvétele – akkor véd, ha a view tényleg
+késésbe esik, de ezt az adat nem támasztotta alá.
+**Következmény:** Ha egyszer mégis szétcsúszik a kettő, a mobil a view értékét
+mutatja; a javítás egy `.in('id', playerIds)` lekérdezés a hookban.
+**Visszavonható?** Igen, néhány sor.
+
+## D-024 – A `usePlayerData` csak szezonösszesítést tölt, meccsbontást nem
+**Dátum:** 2026-09-01
+**Döntés:** A hook `gameHistory`-ja üres marad, és nem használja a
+`@core/season-tables` `getSeasonStatsTable()`-jét (a D-021 még úgy számolt, hogy
+itt majd kell). A meccsenkénti bontást a játékos részletei képernyő tölti majd
+külön hookkal, egy játékosra szűrve.
+**Miért:** A szezonösszesítés a view-ból egyetlen, szezonra és csapatra szűrt
+lekérdezés (13–15 sor). A `gameHistory`-hoz a szezon-tábla összes sorát le
+kellene kérni a csapat minden meccsére (~700 sor), pedig a **lista** képernyő
+egyetlen mezőjét sem használja – ez pontosan a `CLAUDE.md` „mobilon soha ne
+tölts be mindent" szabályába ütközne.
+**Alternatíva:** A webes `useGameData` másolása, ami egyben tölti a kettőt –
+kevesebb hook, cserébe minden játékoslista-nyitás behúzza a teljes meccsbontást.
+**Visszavonható?** Igen, a `gameHistory` egy opció a mappingben.
+
+## D-025 – A pozíciófeliratok a webprojekt öt kanonikus nevét használják
+**Dátum:** 2026-09-01
+**Döntés:** A `data/position-labels.ts` a `@core/positions` öt kódjához a
+webprojekt `SeasonComparison` névsorát rendeli: Irányító / Dobóhátvéd / Bedobó /
+Erőcsatár / Center. A `Jatekosok Lista` mockup kitalált nevei („Bedobó szélső",
+„Bedobó hátvéd") **nem** kerülnek be.
+**Miért:** A mockup demóadata magyar példaneveket és szabadon írt pozíciókat
+tartalmaz; az éles adatbázis viszont kódot tárol (`2-3`, `5-4`), amit a
+`resolvePrimaryPosition()` fordít le. Ugyanazt a játékost a weben és a mobilon
+ugyanannak kell hívni, különben a stáb két különböző szót lát ugyanarra.
+**Alternatíva:** A mockup szavai – szebbek, de sehol máshol nem léteznek.
+**Visszavonható?** Igen, egy fájl öt sora.
 
 <!-- ÚJ DÖNTÉSEK IDE, ALULRA, NÖVEKVŐ SORSZÁMMAL -->
