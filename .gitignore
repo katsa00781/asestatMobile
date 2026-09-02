@@ -41,3 +41,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Expo export kimenete (npx expo export --output-dir dist-ios / dist-android)
+dist-ios/
+dist-android/
