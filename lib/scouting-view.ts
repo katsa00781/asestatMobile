@@ -9,15 +9,17 @@
  * betűkészletben sincs meg, ezért minden átvett szöveg a `plainText`-en megy
  * keresztül (D-064 lelete).
  *
- * Két metrikát a képernyő **nem** mutat: a `pace`-t és a támadólepattanó
- * arányt. Mindkettőhöz az ellenfelek dobás- és lepattanóadata kellene, ami az
- * adatbázisból csapatperspektívánként nem áll össze – lásd D-079.
+ * A tempó és a támadólepattanó-arány korábban kimaradt, mert mindkettőhöz az
+ * ellenfelek dobás- és lepattanóadata kell (D-079). A meccsek párosítása
+ * (D-081) ezt megoldotta, ezért mindkét sor visszakerült; a lábjegyzet
+ * kiírja, hány meccsre állt össze az ellenfél-oldali adat.
  */
 import { POSITION_LABELS_HU } from '@/data/position-labels';
 import type { ScoutingReport } from '@core/pregame-scouting';
 
 import { formatDecimal, formatSigned } from '@/lib/format';
 import { plainText } from '@/lib/report-format';
+import type { TeamRecord } from '@/lib/team-season-stats';
 import type {
   ChanceView,
   KeyPlayerGroup,
@@ -29,23 +31,6 @@ import type {
   ScoutingView,
 } from '@/types/scouting';
 import type { InsightFragment, SplitMetric, SplitSide, SplitSideKey } from '@/types/situational';
-
-/** Egy csapat szezonmérlege és pontösszegei – a `games` tábla soraiból. */
-export interface TeamRecord {
-  games: number;
-  wins: number;
-  losses: number;
-  pointsFor: number;
-  pointsAgainst: number;
-}
-
-export const EMPTY_RECORD: TeamRecord = {
-  games: 0,
-  wins: 0,
-  losses: 0,
-  pointsFor: 0,
-  pointsAgainst: 0,
-};
 
 /** A kulcsember-csoportok sorrendje és magyar felirata. */
 const KEY_PLAYER_LABELS: [keyof ScoutingReport['keyPlayers'], string][] = [
@@ -65,6 +50,8 @@ export function buildScoutingView(
   report: ScoutingReport,
   ownRecord: TeamRecord,
   opponentRecord: TeamRecord,
+  ownPairedGames: number,
+  opponentPairedGames: number,
 ): ScoutingView {
   const chance = buildChance(report);
 
@@ -81,7 +68,7 @@ export function buildScoutingView(
     keyPlayers: buildKeyPlayers(report),
     players: buildPlayers(report),
     positions: buildPositions(report),
-    coverage: buildCoverage(report, ownRecord, opponentRecord),
+    coverage: buildCoverage(report, ownRecord, opponentRecord, ownPairedGames, opponentPairedGames),
     insights: {
       overview: overviewInsight(report, chance),
       plan: planInsight(report),
@@ -129,6 +116,8 @@ interface MetricSpec {
   lowerIsBetter?: boolean;
   /** Előjeles alak (`+9.1`) – a pontkülönbségnél. */
   signed?: boolean;
+  /** Leíró mutató: egyik oldal sem „jobb", ezért nincs kiemelés (tempó). */
+  neutral?: boolean;
 }
 
 function buildMetrics(
@@ -140,6 +129,12 @@ function buildMetrics(
   if (!stats) return [];
 
   const specs: MetricSpec[] = [
+    {
+      label: 'Tempó',
+      own: stats.own.pace,
+      opponent: stats.opponent.pace,
+      neutral: true,
+    },
     {
       label: 'Effektív mezőny %',
       own: stats.own.efg,
@@ -164,6 +159,11 @@ function buildMetrics(
       label: 'Assziszt arány',
       own: stats.own.assistRate,
       opponent: stats.opponent.assistRate,
+    },
+    {
+      label: 'Támadólepattanó %',
+      own: stats.own.orebRate,
+      opponent: stats.opponent.orebRate,
     },
     {
       label: 'Eladott labda %',
@@ -217,7 +217,7 @@ function toMetric(spec: MetricSpec): SplitMetric {
 }
 
 function betterSide(spec: MetricSpec): SplitSideKey | null {
-  if (spec.own === spec.opponent) return null;
+  if (spec.neutral || spec.own === spec.opponent) return null;
   const ownBetter = spec.lowerIsBetter ? spec.own < spec.opponent : spec.own > spec.opponent;
   return ownBetter ? 'home' : 'away';
 }
@@ -292,8 +292,13 @@ function buildCoverage(
   report: ScoutingReport,
   ownRecord: TeamRecord,
   opponentRecord: TeamRecord,
+  ownPairedGames: number,
+  opponentPairedGames: number,
 ): Record<ScoutingSegment, string> {
   const sample = `${ownRecord.games} saját és ${opponentRecord.games} ellenfél-meccs szezonadatából, a liga mezőnyéhez mérve.`;
+  // A tempó és a támadólepattanó-arány az ellenfelek adatán áll, ami a
+  // meccsek párosításából jön – ez nem mindig teljes (D-081).
+  const paired = `Az ellenfél-oldali adat ${ownPairedGames}, illetve ${opponentPairedGames} meccsre állt össze.`;
 
   const players =
     report.advancedPlayers?.opponent.length === 0
@@ -301,7 +306,7 @@ function buildCoverage(
       : `Az ellenfél legalább 80 percet játszott emberei, 36 percre vetítve. ${sample}`;
 
   return {
-    overview: sample,
+    overview: `${sample} ${paired}`,
     plan: `A veszélyforrások és a támadható pontok a liga percentiliseihez mérve. ${sample}`,
     players,
   };

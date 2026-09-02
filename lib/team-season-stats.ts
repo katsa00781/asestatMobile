@@ -1,16 +1,22 @@
 /**
- * A liga csapatmezőnyének szezonösszegzése a `@core/team-analysis` bemeneti
- * alakjában: volumen, ellenfél-oldali volumen és keret szerepkörökkel.
+ * A liga csapatmezőnyének szezonösszegzése: volumen, ellenfél-oldali volumen,
+ * mérleg és keret szerepkörökkel.
+ *
+ * **Ez a Szerepkör-elemzés és az Ellenfél scouting közös adatrétege.** A két
+ * képernyő ugyanazt a három lekérdezést futtatta külön-külön; most egy
+ * modul állítja elő a mezőnyt, és egy cache szolgálja ki mindkettőt (D-086).
+ * A kimenet a `@core/team-analysis` `TeamSeasonStat` alakja, ami bővebb, mint
+ * a `@core/pregame-scouting`-é – a scouting ugyanezt a tömböt kapja meg.
  *
  * Tiszta adatréteg – React nincs benne, csak Supabase-lekérdezés és
  * összegzés. Azért külön modul, mert a lánc (lekérdezés → `TeamSeasonStat[]`
- * → `analyzeTeamSeason`) így hálózati méréssel is végigfuttatható, a képernyő
- * elindítása nélkül.
+ * → `analyzeTeamSeason` / `analyzePreGameScouting`) így hálózati méréssel is
+ * végigfuttatható, a képernyő elindítása nélkül.
  *
  * Három lekérdezés fut, mind a kapott szezonra:
  *
- * 1. `games` – csapatonként meccsszám, szerzett és kapott pont, plusz a
- *    meccsek párosítása (lásd `pairGames`).
+ * 1. `games` – csapatonként meccsszám, mérleg, szerzett és kapott pont, plusz
+ *    a meccsek párosítása (lásd `pairGames`).
  * 2. A szezon `player_game_stats` táblája – **csapatösszegzéshez**. A
  *    szezonösszesítő view itt nem használható: abból hiányoznak a szezon
  *    közben távozott játékosok sorai (D-078).
@@ -28,6 +34,7 @@ import {
   type RawPlayerSeasonStat,
 } from '@core/player-analysis';
 import { buildPositionMetadata } from '@core/positions';
+import type { PlayerSeasonStat } from '@core/pregame-scouting';
 import { SEASON_STATS_TABLES } from '@core/season-tables';
 import type { TeamSeasonStat } from '@core/team-analysis';
 
@@ -40,9 +47,30 @@ import type { Team } from '@/types/filters';
  */
 const LEAGUE = 'NB I/A';
 
+/** Egy csapat szezonmérlege és pontösszegei – a `games` tábla soraiból. */
+export interface TeamRecord {
+  games: number;
+  wins: number;
+  losses: number;
+  pointsFor: number;
+  pointsAgainst: number;
+}
+
+export const EMPTY_RECORD: TeamRecord = {
+  games: 0,
+  wins: 0,
+  losses: 0,
+  pointsFor: 0,
+  pointsAgainst: 0,
+};
+
 export interface TeamSeasonPayload {
   /** A liga csapatai szezonösszegzéssel, kerettel és ellenfél-volumennel. */
   teams: TeamSeasonStat[];
+  /** Csapatonkénti mérleg és pontösszeg. */
+  records: Map<string, TeamRecord>;
+  /** Csapatonkénti keret a scouting alakjában, szerepkörökkel. */
+  rosters: Map<string, PlayerSeasonStat[]>;
   /** Hány liga-játékos szerepkörét sikerült levezetni. */
   ratedPlayers: number;
   /** Csapatonként hány meccshez lett ellenfél-oldali statisztika. */
@@ -51,6 +79,8 @@ export interface TeamSeasonPayload {
 
 export const EMPTY_TEAM_SEASON: TeamSeasonPayload = {
   teams: [],
+  records: new Map(),
+  rosters: new Map(),
   ratedPlayers: 0,
   pairedGames: new Map(),
 };
@@ -70,7 +100,7 @@ export async function fetchTeamSeasonStats(
     fetchAllRows<unknown>((from, to) =>
       supabase
         .from('games')
-        .select('id, date, home_away, our_team_id, our_score, opp_score')
+        .select('id, date, home_away, our_team_id, our_score, opp_score, result')
         .eq('season_id', seasonId)
         .range(from, to),
     ),
@@ -104,6 +134,8 @@ export async function fetchTeamSeasonStats(
 
   return {
     teams: buildTeams(games, gameTotals, opponentOf, rosters, teams, seasonName),
+    records: buildRecords(games),
+    rosters,
     ratedPlayers,
     pairedGames: countPaired(games, opponentOf),
   };
@@ -115,6 +147,7 @@ interface GameRow {
   date: string;
   homeAway: string;
   teamId: string;
+  won: boolean;
   pointsFor: number;
   pointsAgainst: number;
 }
@@ -131,6 +164,7 @@ function toGames(rows: unknown[]): GameRow[] {
         date,
         homeAway: typeof row.home_away === 'string' ? row.home_away : '',
         teamId,
+        won: row.result === 'win',
         pointsFor: toNumber(row.our_score),
         pointsAgainst: toNumber(row.opp_score),
       },
@@ -177,6 +211,23 @@ function isMirroredSide(first: string, second: string): boolean {
   return (
     (first === 'home' && second === 'away') || (first === 'away' && second === 'home')
   );
+}
+
+/** Csapatonkénti mérleg és pontösszeg. */
+function buildRecords(games: GameRow[]): Map<string, TeamRecord> {
+  const records = new Map<string, TeamRecord>();
+
+  for (const game of games) {
+    const entry = records.get(game.teamId) ?? { ...EMPTY_RECORD };
+    entry.games += 1;
+    if (game.won) entry.wins += 1;
+    else entry.losses += 1;
+    entry.pointsFor += game.pointsFor;
+    entry.pointsAgainst += game.pointsAgainst;
+    records.set(game.teamId, entry);
+  }
+
+  return records;
 }
 
 /** Csapatonként hány meccshez van ellenfél-oldali statisztika. */
@@ -281,7 +332,7 @@ function buildTeams(
   games: GameRow[],
   gameTotals: Map<string, Totals>,
   opponentOf: Map<string, string>,
-  rosters: Map<string, RosterEntry[]>,
+  rosters: Map<string, PlayerSeasonStat[]>,
   teams: Team[],
   seasonName: string,
 ): TeamSeasonStat[] {
@@ -311,7 +362,7 @@ function buildTeams(
           dreb: 0,
           tov: 0,
         },
-        roster: rosters.get(game.teamId) ?? [],
+        roster: (rosters.get(game.teamId) ?? []).map(toRosterEntry),
       };
       byTeam.set(game.teamId, team);
     }
@@ -351,7 +402,7 @@ function buildTeams(
 function buildRosters(
   rows: unknown[],
   seasonName: string,
-): { rosters: Map<string, RosterEntry[]>; ratedPlayers: number } {
+): { rosters: Map<string, PlayerSeasonStat[]>; ratedPlayers: number } {
   const entries: Array<{ teamId: string; raw: RawPlayerSeasonStat; height: number }> = [];
 
   for (const row of rows) {
@@ -407,27 +458,41 @@ function buildRosters(
   }
 
   const benchmarks = buildLeagueBenchmarks(entries.map((entry) => entry.raw));
-  const rosters = new Map<string, RosterEntry[]>();
+  const rosters = new Map<string, PlayerSeasonStat[]>();
   let ratedPlayers = 0;
 
   for (const { teamId, raw, height } of entries) {
-    const roles = analyzePlayerSeason(raw, benchmarks).roles;
-    if (roles.length > 0) ratedPlayers += 1;
+    // A `roleKeys` az angol kulcsokat adja, a `roles` a magyar feliratot. A
+    // `@core/team-analysis` mindkettőt elfogadja (`normalizeRoleKeys`), a
+    // `@core/pregame-scouting` viszont **kulcsra** hasonlít, ezért a kulcs
+    // megy tovább (D-087).
+    const { roleKeys } = analyzePlayerSeason(raw, benchmarks);
+    if (roleKeys.length > 0) ratedPlayers += 1;
 
-    const fga = raw.close.attempted + raw.mid.attempted + raw.three.attempted;
-
-    const player: RosterEntry = {
+    const player: PlayerSeasonStat = {
       playerId: raw.playerId,
       name: raw.name,
       position: raw.position,
+      positionLabel: raw.positionLabel ?? undefined,
       positionBuckets: raw.positionBuckets,
-      positionLabel: raw.positionLabel ?? null,
-      rawPosition: raw.positionLabel ?? null,
-      minutes: raw.minutes,
-      // A webes `buildTeamSeasonStats` képlete: dobás + 0.44 · büntető + eladott.
-      usageProxy: fga + 0.44 * raw.ft.attempted + raw.turnovers,
       heightCm: height || undefined,
-      roles,
+      games: raw.games,
+      minutes: raw.minutes,
+      points: raw.points,
+      fga2: raw.close.attempted + raw.mid.attempted,
+      fgm2: raw.close.made + raw.mid.made,
+      fga3: raw.three.attempted,
+      fgm3: raw.three.made,
+      fta: raw.ft.attempted,
+      ftm: raw.ft.made,
+      oreb: raw.rebounds.offensive,
+      dreb: raw.rebounds.defensive,
+      ast: raw.assists,
+      tov: raw.turnovers,
+      stl: raw.steals,
+      blk: raw.blocks,
+      val: raw.valuation,
+      roles: roleKeys,
     };
 
     const roster = rosters.get(teamId);
@@ -436,6 +501,25 @@ function buildRosters(
   }
 
   return { rosters, ratedPlayers };
+}
+
+/**
+ * Keretjátékos → a `@core/team-analysis` roster alakja. A labdaigény a webes
+ * `buildTeamSeasonStats` képlete: dobás + 0.44 · büntető + eladott labda.
+ */
+function toRosterEntry(player: PlayerSeasonStat): RosterEntry {
+  return {
+    playerId: player.playerId,
+    name: player.name,
+    position: player.position,
+    positionBuckets: player.positionBuckets,
+    positionLabel: player.positionLabel ?? null,
+    rawPosition: player.positionLabel ?? null,
+    minutes: player.minutes,
+    usageProxy: player.fga2 + player.fga3 + 0.44 * player.fta + player.tov,
+    heightCm: player.heightCm,
+    roles: player.roles,
+  };
 }
 
 // --- Rendszerhatár: a Supabase válasza típusozatlan, itt validáljuk. ---

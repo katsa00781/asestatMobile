@@ -135,6 +135,76 @@ Sablon:
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
 
+## 2026-09-02 – A scouting és a szerepkör-elemzés közös adatrétege
+
+**Mit:** A két képernyő ugyanazt a három szezonlekérdezést futtatta külön
+kóddal és külön cache-sel; most egy modul és egy cache szolgálja ki
+mindkettőt. Ezzel az Ellenfél scouting is megkapta az ellenfél-oldali
+statisztikát, tehát a D-079-es korlát megszűnt: **visszakerült a tempó és a
+támadólepattanó-arány sora.**
+
+*Adatréteg.* A `lib/team-season-stats.ts` mostantól nemcsak a
+`TeamSeasonStat[]` mezőnyt adja, hanem a csapatonkénti mérleget (`records`) és
+a kereteket is (`rosters`, a `@core/pregame-scouting` `PlayerSeasonStat`
+alakjában, szerepkörökkel). A `@core/team-analysis` roster alakja ebből
+származtatva áll elő (`toRosterEntry`), tehát a labdaigény-képlet egy helyen
+van. Új hook: `useTeamSeasonData` – egyetlen, szezonra kulcsolt cache, amit a
+`useScoutingData` és a `useTeamRolesData` egyaránt használ (D-086). A
+gyakorlati haszon: a scoutingról a szerepkör-elemzésre lépve nincs újabb
+2 MB-os lekérdezés.
+
+*Szerepkörök átadása.* A `@core/pregame-scouting` a labdahordozókat **angol
+szerepkörkulcsra** hasonlítja, a `@core/player-analysis` `roles` mezője
+viszont magyar feliratot ad – ezért a `roleKeys` megy tovább mindkét modellbe
+(D-087). A `@core/team-analysis` mindkét alakot elfogadja
+(`normalizeRoleKeys`), így a szerepkör-elemzés kimenete bitre ugyanaz maradt.
+
+*Scouting nézet.* A szembeállított metrikasorok száma 9-ről 11-re nőtt
+(`Tempó` és `Támadólepattanó %`). A tempó **leíró** mutató: egyik oldal sem
+kap kiemelést, mert a gyorsabb játék nem jobb, csak másfajta (új `neutral`
+jelző a `MetricSpec`-en). Az Áttekintés lábjegyzete kiírja, hány meccsre állt
+össze az ellenfél-oldali adat mindkét csapatnál.
+
+**Fájlok:** `lib/team-season-stats.ts` (mérleg, keret, `toRosterEntry`),
+`hooks/useTeamSeasonData.ts` (új), `hooks/useScoutingData.ts` (a saját
+lekérdezése és összegzése törölve, −250 sor), `hooks/useTeamRolesData.ts`
+(ugyanígy), `lib/scouting-view.ts` (tempó és támadólepattanó sor, közös
+`TeamRecord`, bővebb lábjegyzet)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan. A scouting lánc
+(közös lekérdezés → `analyzePreGameScouting` → `buildScoutingView`) élesben, a
+kliens anon kulcsával lefuttatva **mind az 5 szezonra, az ASE összes
+ellenfelére**: 2025/2026-ban 15, 2024/2025-ben 13 párosítás, sehol `NaN`,
+`Infinity` vagy `undefined`. A két új sor értéke reális: tempó 74–79
+birtoklás/meccs (korábban az `opponent` blokk nélkül a fele lett volna),
+támadólepattanó-arány 18.9–32.5% (korábban minden csapatnál 100%). A
+szerepkör-elemzés lánca változatlan kimenetet ad a `roleKeys`-re váltás után:
+ASE 2025/2026 – 13 fős keret, 9 lefedett + 4 többszörös + 3 hiányzó
+szerepkör, 38.2% top2 labdaigény, 196.8 cm, „Félpályás, játékszervező-
+központú" klaszter, tempó 74.8 (21. percentilis), nettó rating +7.0 (84.);
+2024/2025 – 11 + 4 + 1 szerepkör, 36.9%, 194.2 cm, „Védekezés-központú",
+tempó 77.9 (61.), nettó +20.9 (95.). Mind a 30 szezon×csapat kombináció és
+mind a 28 scouting-párosítás hibás mező nélkül futott. Külön mérés arra, hogy
+a szerepkörök átadása mit változtat a scouting riportján: **0/28 párosításon**
+tér el a kulcsemberek listája, a poszt-összehasonlítás és a győzelmi esély –
+a `roleKeys` tehát helyes bemenet, de a jelenlegi adaton nem mozdít a
+kimeneten. A betűkészletek `cmap` táblája ellenőrizve a nézetben előforduló
+speciális jelekre (`−` `–` `·` `%` `+`): mind a 7 fájlban megvan.
+`npx expo export` iOS-re és Androidra lefut; mindkét Hermes bundle
+tartalmazza a „Tempó", „Támadólepattanó %" és „Az ellenfél-oldali adat"
+feliratokat.
+
+**Nyitva maradt:** **Eszközön még nem futott.** Az Áttekintés szegmens két
+sorral hosszabb lett – a 11 szembeállított metrikasor görgetését valós
+kijelzőn kell megítélni. A D-079 visszavonása a `pace`/`orebRate` sorra
+vonatkozik; a 25 nem párosítható meccssor (adatbeviteli hiba: mindkét csapat
+sora ugyanazt az eredményt írja a saját oldalára) továbbra is kimarad az
+ellenfél-összegzésből. A P12 lila aktív tab-állapota továbbra is nyitva van.
+
+**Commit:** `refactor: közös szezonadatréteg a scoutinghoz és a szerepkörökhöz`
+
+---
+
 ## 2026-09-02 – Szerepkör-elemzés képernyő (számított elemzések, 3/3)
 
 **Mit:** Elkészült a P12 „Számított elemzések" szekciójának harmadik sora és a
@@ -240,9 +310,11 @@ keret-értelmezés együtt 25-30 sor, sok görgetés; (2) a `MeterList` 62pt-os
 értékoszlopa a leghosszabb alakkal (`100.0%`); (3) a három szegmens felirata
 („Szerepkörök" a legszélesebb) a 36pt-os kontrollban 390pt alatt, Androidon;
 (4) a négynél több nevet tartalmazó sorok tördelése („+3" utótaggal).
-Nyitva marad, hogy a **scouting** képernyő továbbra is a D-079-es korláttal
+~~Nyitva marad, hogy a **scouting** képernyő továbbra is a D-079-es korláttal
 fut, pedig a D-081-es párosítás ott is használható lenne – a két hook
-lekérdezése ezzel egyesíthető is volna (`lib/team-season-stats`). Érvényben
+lekérdezése ezzel egyesíthető is volna.~~ **Elintézve** ugyanezen a napon,
+lásd a fenti „A scouting és a szerepkör-elemzés közös adatrétege" bejegyzést
+(D-086). Érvényben
 marad a korábbi lelet: a csomagolt betűkészletekből hiányzik az `ő`/`ű`
 glifa – ez itt az „Erősségek", az „Elsődleges irányító", az „Erőcsatár" és a
 „Gyűrűvédő" szövegét érinti. A P12 lila aktív tab-állapota továbbra is nyitva
@@ -3167,6 +3239,10 @@ nevezőkkel; (b) a két szám kiírása úgy, ahogy van – félrevezető.
 plusz a pontátlagok a `games` tábláról.
 **Visszavonható?** Igen, ha a webprojekt egyszer ellenfél-oldali összegzést is
 ír a sémába.
+**FELÜLÍRVA (2026-09-02, D-081):** a párosítás nem névegyezésen megy, hanem
+dátum + eredményhalmaz + tükrözött hazai/vendég oldal alapján, ami 96–99%-os
+fedettséget ad. Mindkét sor visszakerült a képernyőre, valós értékkel (tempó
+74–79 birtoklás, támadólepattanó-arány 19–33%).
 
 ## D-080 – Az ellenfél választható, nem csak a következő találkozóé
 **Dátum:** 2026-09-02
@@ -3283,3 +3359,42 @@ erősségek és gyengeségek eltűnnének.
 **Következmény:** A `@core` tier-felirata („Liga elit") minden sor alatt ott
 marad, tehát a besorolás olvasható, csak a szín nem sugall értékítéletet.
 **Visszavonható?** Igen, a `DESCRIPTIVE_KEYS` halmaz ürítésével.
+
+## D-086 – Egy adatréteg és egy cache a scoutingnak és a szerepkör-elemzésnek
+**Dátum:** 2026-09-02
+**Döntés:** A `useScoutingData` és a `useTeamRolesData` saját lekérdezés
+helyett a közös `useTeamSeasonData` hookot használja, ami a
+`lib/team-season-stats` moduljából tölt, egyetlen, szezonra kulcsolt
+cache-be.
+**Miért:** A két hook szó szerint ugyanazt a három lekérdezést futtatta
+(`games`, szezon `player_game_stats`, `player_season_stats_by_season`), és
+ugyanazt a csapatösszegzést építette – 2.4 MB adat, kétszer letöltve, két
+cache-be. A duplikáció mellett tartalmi kockázat is volt: a két összegzés
+elcsúszhatott volna egymástól, és a scouting nem kapta meg az ellenfél-oldali
+volument (D-081), ami már a másik oldalon készen állt.
+**Alternatíva:** (a) a duplikáció meghagyása, a párosítás átmásolásával –
+két helyen kellene karbantartani ugyanazt a képletet; (b) Zustand store –
+ez nem UI state, a modulszintű cache elég (D-026).
+**Következmény:** A scoutingról a szerepkör-elemzésre (és vissza) lépve nincs
+új lekérdezés. A `TeamRecord` és az `EMPTY_RECORD` a `lib/scouting-view`-ból
+átkerült a `lib/team-season-stats`-ba, mert immár adatréteg-fogalom.
+**Visszavonható?** Igen, de nem érdemes.
+
+## D-087 – A `@core` modellek angol szerepkörkulcsot kapnak, nem magyar feliratot
+**Dátum:** 2026-09-02
+**Döntés:** A keretjátékosok `roles` mezőjébe a `@core/player-analysis`
+`roleKeys`-e kerül (angol kulcs), nem a `roles`-e (magyar felirat).
+**Miért:** A `@core/pregame-scouting` a labdahordozókat egy **angol kulcsokból**
+álló halmazra (`BALL_HANDLER_ROLE_HINTS`) hasonlítja, a magyar felirat tehát
+sosem találna. A `@core/team-analysis` ezzel szemben `normalizeRoleKeys`-szel
+mindkét alakot elfogadja, így a kulcs átadása ott nem változtat semmit. A
+webprojekt mindkét helyre a magyar feliratot adja át – ott a labdahordozó-
+heurisztika csendben sosem fut le; ezt a mobilban nem másoltuk le.
+**Alternatíva:** magyar felirat átadása, a webbel egyezően – a heurisztika
+nem működne.
+**Következmény:** Méréssel a jelenlegi adaton **0/28 párosításon** változik a
+scouting riportja a kulcsok átadásától (a `comboGuards` ág eredménye
+egybeesik a tartalék SG-szűrővel), tehát a döntés most nem mozdít a
+kimeneten – de a heurisztika mostantól tud működni. A `@core` javítása (a
+`resolveRoleKey` használata a halmaz helyett) a webprojektre tartozik.
+**Visszavonható?** Igen, a `lib/team-season-stats` `buildRosters`-ében.
