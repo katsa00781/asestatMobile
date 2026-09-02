@@ -130,6 +130,37 @@ Sablon:
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
 
+## 2026-09-02 – Arányjelző sáv gradienssel (`expo-linear-gradient`)
+
+**Mit:** A `ProgressBar` kitöltése a mockup szerinti, balról jobbra futó
+gradienst kapta a tömör szín helyett – ehhez az `expo-linear-gradient`
+bekerült a függőségek közé (engedéllyel, D-056). A D-055 döntés ezzel
+**felülírva**.
+
+*Színek.* A cián sáv a mockup két pontos értékét használja (`shade.cyanDeep` →
+`accent.cyan`), tehát a `p0-style-tile` „Egyéb elemek" sávja most karakterre
+egyezik. A többi hangnemhez (positive / orange / ai) a mockup nem ad sötét
+véget, ezért ott a gradiens az accent szín 55%-os alakjából fut a tömörbe –
+nyolcjegyű hexszel, a meglévő token értékéhez fűzött alfa csatornával, **új
+színtoken nélkül**. A mockup külső glow-ja továbbra is elmarad (D-005).
+
+**Fájlok:** `components/ProgressBar.tsx`, `package.json` +
+`package-lock.json` (`expo-linear-gradient` ~57.0.1)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan. `npx expo export`
+iOS-re és Androidra lefut; mindkét Hermes bundle tartalmazza az
+`ExpoLinearGradient` natív modul hivatkozását és a `#0096B8` gradiensvéget.
+
+**Nyitva maradt:** A gradiens **natív modul**: Expo Go-ban benne van, saját dev
+clienttel viszont újra kell buildelni, különben a sáv nem rajzolódik ki. A négy
+dobászóna sávja eszközön még nem futott – a 6pt-os magasságon az átmenet
+láthatósága valós kijelzőn ítélhető meg. A `CLAUDE.md` tech stack felsorolása
+még nem említi az új csomagot; ha kéred, felveszem oda is.
+
+**Commit:** `setup: expo-linear-gradient és gradiens arányjelző sáv`
+
+---
+
 ## 2026-09-02 – Játékos részletei képernyő
 
 **Mit:** Elkészült az S6 ötödik képernyője: a `players/[id]` helyőrző helyén
@@ -2284,6 +2315,8 @@ szűrés `.or('team_id.is.null,…')`-lel (bonyolultabb, és nem ad többet).
 
 ## D-055 – Az arányjelző sáv tömör színnel fut, gradiens nélkül
 **Dátum:** 2026-09-02
+**Státusz:** **Felülírva – lásd D-056.** A csomag felvételére engedélyt kaptam,
+a sáv azóta gradienssel fut.
 **Döntés:** A `ProgressBar` kitöltése tömör accent szín, nem a mockup
 `linear-gradient(90deg,#0096B8,#00D4FF)` átmenete és nem is a hozzá tartozó
 külső glow.
@@ -2294,3 +2327,21 @@ szerepe az arány leolvashatósága, ehhez a tömör szín elég.
 6pt-os sávért nem éri meg), vagy két egymásra rétegzett félig átlátszó nézet
 (nem ad valódi átmenetet).
 **Visszavonható?** Igen, a `ProgressBar` kitöltő nézete az egyetlen hely.
+
+## D-056 – `expo-linear-gradient` felvéve, a sáv gradienst kap
+**Dátum:** 2026-09-02
+**Döntés:** Az `expo-linear-gradient` (~57.0.1) bekerül a függőségek közé, és a
+`ProgressBar` kitöltése a mockup `linear-gradient(90deg, …)` átmenetét
+rajzolja. Cián hangnemnél a mockup két értéke (`shade.cyanDeep` →
+`accent.cyan`), a többinél az accent szín 55%-os alakja fut a tömörbe – új
+színtoken nélkül, a meglévő tokenhez fűzött alfa csatornával.
+**Miért:** A `CLAUDE.md` a mockup pontos replikálását kéri, és a csomag
+felvételére kifejezett engedélyt kaptam. A csomag az Expo SDK része (Expo
+Go-ban benne van), egyetlen komponens használja, és nincs JS-oldali
+alternatívája: RN natívan nem tud gradienst.
+**Alternatíva:** Tömör szín (D-055 – kevesebb csomag, de eltér a mockuptól),
+vagy Skia `LinearGradient` (a `@shopify/react-native-skia` az S7-ben úgyis
+jön, de egy 6pt-os sávért egy Skia canvas nagyobb ár).
+**Következmény:** Natív modul: saját dev clientet újra kell buildelni. A
+`CLAUDE.md` tech stack felsorolása még nem említi.
+**Visszavonható?** Igen, a `ProgressBar` az egyetlen használati hely.
