@@ -62,7 +62,7 @@
 - [x] `components/StatTile.tsx` – label + JetBrains Mono érték + opcionális trend és accent (a webes `StatCard` mobil párja)
 - [x] `components/StackedRow.tsx` – listaelem, függőlegesen csoportosított adatokkal (a `DataTable` sor mobil párja)
 - [x] `components/StatMatrix.tsx` – vízszintesen görgethető statisztikai mátrix **fagyasztott első oszloppal**; iOS és Android görgetés-szinkron ellenőrzése
-- [ ] `components/Badge.tsx` – 7 variáns (cyan / orange / ai / positive / negative / warning / neutral)
+- [x] `components/Badge.tsx` – 7 variáns (cyan / orange / ai / positive / negative / warning / neutral)
 - [ ] `components/SkeletonBlock.tsx` – shimmer betöltés (Reanimated)
 - [x] `components/EmptyState.tsx` – üres állapot ikonnal és szöveggel
 - [ ] Tap target audit: minden interaktív elem ≥ 44×44pt vagy `hitSlop`-pal kiegészítve
@@ -129,6 +129,49 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Badge komponens
+
+**Mit:** Elkészült a `components/Badge.tsx`, a rövid állapotcímke hét
+variánssal. A `p0-style-tile.html` „Badge-ek" blokkját replikálja: Barlow
+Condensed 11pt ALL CAPS, `tracking.label` (0.12em) betűköz, 3/8pt margó, `xs`
+(2pt) sarok, 1pt keret. A hat accent variáns (cyan / orange / ai / positive /
+negative / warning) közvetlenül a `constants/theme.ts` `glow` tokenjeiből
+építkezik – a háttér a `fill`, a keret a `border` –, így a mockup rgba
+értékei (0.14 / 0.30, az AI-nál 0.16 / 0.40) nem duplázódnak a komponensben.
+A felirat színe az accent szín, **kivéve** az `ai` variánst: lila háttéren az
+`accent.ai` olvashatatlan, ott a világosabb `text.ai` (`#C4B5FD`) megy, ahogy
+a mockupban is. A hetedik, `neutral` variáns nem accent: surface2 háttér,
+`border.subtle` keret, `text.secondary` felirat.
+
+A komponens egyetlen `Text` elem (nem `View` + `Text`), így vízszintesen a
+tartalmára zsugorodik; az `alignSelf: 'flex-start'` a függőleges nyújtást
+kapcsolja ki oszlop-szülő alatt. A doboz magassága fix `lineHeight: 14` +
+`includeFontPadding: false` révén platformfüggetlen (az utóbbi iOS-en nem
+értelmezett mező, ezért nem kell `Platform` elágazás) – lásd D-036.
+
+**Fájlok:** `components/Badge.tsx` (új)
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan.
+
+Metro-oldal: ideiglenesen kitettem az `app/index.tsx` füstteszt képernyőre
+mind a hét variánst egy tördelt sorban, majd lefuttattam az `npx expo
+export`-ot iOS-re és Androidra. **Mindkét** Hermes bundle tartalmazza a hét
+feliratot (az ékezeteseket UTF-16-ban keresve), az `includeFontPadding`
+mezőt, az AI variáns `rgba(124,58,237,0.16)` / `rgba(124,58,237,0.40)`
+rétegeit, a `#C4B5FD` feliratszínt és a `neutral` `#0F1F3D` hátterét. Az
+ideiglenes kitételt visszavontam.
+
+**Nyitva maradt:** Eszközön még nem futott. Ellenőrizni kell (a) hogy a fix
+`lineHeight` + kikapcsolt betűpadding mellett a felirat optikailag középen
+ül-e Androidon (D-036); (b) hogy a 2pt-os sarok az `overflow: 'hidden'`-nel
+tisztán vág-e iOS-en. A badge szándékosan nem nyomható (a mockupban sincs
+állapota), ezért a 44pt-os érintési szabály nem érinti – ha az S6-ban
+szűrő-chipként kattinthatóvá válna, az a méretet is újratárgyalja.
+
+**Commit:** `feat: badge komponens`
+
+---
 
 ## 2026-09-01 – Statisztikai mátrix (`StatMatrix`)
 
@@ -1431,3 +1474,18 @@ keret adja – ha egy régi Androidon nem renderelődne, a mátrix attól még h
 egy SVG réteg minden mátrixban azért, amit egy stílussor megold; vagy árnyék
 nélkül, csak kerettel – a mockuptól való eltérés lenne.
 **Visszavonható?** Igen, egy sor a `StatMatrix` `frozen` stílusában.
+
+## D-036 – A badge fix sormagassággal és kikapcsolt Android betűpaddinggel fut
+**Dátum:** 2026-09-02
+**Döntés:** A `Badge` `Text`-je explicit `lineHeight: 14`-et kap, és
+`includeFontPadding: false`-t állít.
+**Miért:** A badge doboza a szöveg magasságából nő ki (3pt függőleges margó +
+1pt keret), így a platformok eltérő alapértelmezett sormagassága és az Android
+`includeFontPadding` extra betűpaddingje eltérő magasságú címkét adna a két
+platformon – ugyanabban a sorban, ugyanazon kártya fejlécében. A fix érték a
+mockup ~1.2-es sorközét adja vissza 11pt-on. Az `includeFontPadding` Androidon
+kívül nem értelmezett mező, ezért nem igényel `Platform` elágazást.
+**Alternatíva:** Fix `height` a dobozon – az viszont a rendszer nagyobb
+betűméreténél elvágná a feliratot. Vagy hagyni az alapértelmezést, és elfogadni
+az 1–3pt-os platformeltérést – egy fejlécsorban ez látható elcsúszás.
+**Visszavonható?** Igen, két stílusmező.
