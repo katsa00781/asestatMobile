@@ -1,5 +1,5 @@
 /**
- * Megjelenítési formázók – dátum, szám, napkülönbség.
+ * Megjelenítési formázók – dátum, szám, napkülönbség, név.
  *
  * A hónap- és napnevek kézzel vannak felsorolva, nem a
  * `toLocaleDateString('hu-HU')`-ból jönnek: a Hermes `Intl` támogatása
@@ -7,6 +7,7 @@
  * saját implementáció), így ugyanaz a hívás két különböző szöveget adhatna a
  * két platformon. Lásd `docs/feature-tasks.md` – D-039.
  */
+import { normalizeText } from '@/lib/search';
 
 const MONTHS_HU = [
   'január',
@@ -123,4 +124,23 @@ export function shortenPlayerName(name: string): string {
 
   const [family, given] = parts;
   return `${family} ${given.charAt(0)}.`;
+}
+
+/**
+ * Csapatjel a tabella badge-ébe: a rövid név első három betűje, ékezet nélkül,
+ * nagybetűvel (`Körmend` → `KOR`, `Falco` → `FAL`).
+ *
+ * A saját csapatunk kivétel: az `Atomerőmű` mechanikusan `ATO` lenne, a bevett
+ * jelölés viszont `ASE` – a mockup is így írja (D-059). A kivételek a teljes
+ * névre illenek, mert az adatbázisban az az egyedi.
+ */
+const ABBREVIATIONS: Record<string, string> = {
+  'atomerőmű se': 'ASE',
+};
+
+export function teamAbbreviation(fullName: string, shortName: string): string {
+  const override = ABBREVIATIONS[fullName.trim().toLowerCase()];
+  if (override) return override;
+
+  return normalizeText(shortName).slice(0, 3).toUpperCase();
 }

@@ -76,7 +76,7 @@
 - [x] **Meccs részletei** (`app/(tabs)/games/[id].tsx`) – eredmény, negyedek, box score StatMatrix-ben, mentett pregame/postgame riport `GlowCard accent="ai"`-ban
 - [x] **Játékosok – lista** (`app/(tabs)/players/index.tsx`) – szezon-aggregált lista, rendezés, névkeresés. Mockup: `Jatekosok Lista`
 - [x] **Játékos részletei** (`app/(tabs)/players/[id].tsx`) – szezonstatisztika, meccsenkénti bontás, mentett játékos-riportok
-- [ ] **Tabella** (`app/(tabs)/standings.tsx`) – bajnoki tabella StatMatrix-ben. Mockup: `Tabella`
+- [x] **Tabella** (`app/(tabs)/standings.tsx`) – bajnoki tabella saját sorkomponenssel. Mockup: `Tabella`
 - [ ] **Elemzés** (`app/(tabs)/analysis/index.tsx`) – mentett AI riportok listája (pregame / postgame / játékos / csapat) + számított elemzések a `@core`-ból (szituációk, four factors, clutch)
 - [ ] Tab layout véglegesítése: 5 tab ikonokkal, aktív állapot cián glow-val, safe area alul
 
@@ -129,6 +129,68 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Tabella képernyő
+
+**Mit:** Elkészült az S6 hatodik képernyője: a `Tabella` tab helyőrzője helyén
+most a bajnoki állás áll a `tabella` mockup szerint – cím + alcím, ragadós
+oszlopfejléc, 14 csapatsor, végül a frissítés dátuma és a fordulószám.
+
+*Adat.* Új hook: `useStandings`. A `standings` tábla soronként egy teljes
+tabellaállást tárol JSON tömbben; a hook a szezon **legmagasabb fordulószámú**
+sorát kéri (`order=matchday.desc,date.desc&limit=1`), ahogy a webes
+`StandingsView` is. A cache kulcsa **csak a szezon**, mert a tabella nem
+csapatfüggő – csapatváltáskor nincs új lekérdezés, csak a kiemelt sor változik.
+A csapatnevek, a rövid nevek és a kiemelés a szűrő csapatlistájából jönnek.
+
+*Komponens.* Egy új: `StandingsRow` + `StandingsRowHeader` – a mockup nyolc
+oszlopos rácsa (28/26/1fr/22/22/18/36/24, 8pt köz, 56pt sormagasság). A
+`StatMatrix` itt nem jó: annak vízszintes görgetése és fagyasztott oszlopa van,
+a tabella viszont elfér a képernyő szélességében. A ragadós oszlopfejléc a
+`ScrollView` `stickyHeaderIndices`-ével készült.
+
+**Eltérések, hiányok:**
+
+- A lábléc a mockup dátuma **mellett a fordulószámot** is kiírja (D-062,
+  engedéllyel): „Frissítve: 2026. április 25. · 26. forduló".
+- A csapatnév a **rövid néven** áll (`Falco`, `Kaposvár`), nem a teljes néven
+  (D-058): a névoszlopra ~126pt marad, a `Falco-Vulcano Energia KC Szombathely`
+  ott csak levágva férne el.
+- A badge jele a rövid név három betűje ékezet nélkül (`Körmend` → `KOR`), az
+  `Atomerőmű SE` kivétel: `ASE`, ahogy a mockup is írja (D-059).
+- A kiemelt sor **teljes szélességű** (D-063), hogy a bal oldali cián sáv a
+  kijelző széléig érjen; az elválasztó vonal viszont behúzva marad.
+- A legfrissebb tabellasorban minden csapat **kétszer** szerepel az importból –
+  a hook helyezésenként az elsőt tartja meg (D-057).
+- A `season_id` nélküli régi tabellasorok **nem** jelennek meg (D-060), így a
+  2025/2026-on kívüli szezonokra üres állapot jön.
+
+**Fájlok:** `app/(tabs)/standings.tsx` (helyőrző helyett a képernyő),
+`hooks/useStandings.ts` (új), `components/StandingsRow.tsx` (új),
+`types/standings.ts` (új), `lib/format.ts` (`teamAbbreviation`),
+`constants/theme.ts` + `tailwind.config.ts` (`border.rowDeep`)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan. Az adat élesben,
+a kliens anon kulcsával ellenőrizve: a 2025/2026-os szezon legfrissebb sora a
+26. forduló (2026-04-25), 28 nyers elemből a deduplikálás után 14 sor lesz,
+mind a 14 csapat megvan a `teams` táblában (tehát nincs tartaléknév), és a
+számoszlopok a legszélesebb esetben is beférnek (`−332`, `+379` a 36pt-os
+`+/-` oszlopba). `npx expo export` iOS-re és Androidra lefut; mindkét Hermes
+bundle tartalmazza a képernyő feliratait („Nincs tabella", „NB I/A", „Csapat",
+„Frissítve", „forduló", „A tabella betöltése sikertelen").
+
+**Nyitva maradt:** **Eszközön még nem futott.** Három dolgot valós kijelzőn
+kell megítélni: (1) a ragadós oszlopfejléc viselkedése Androidon (a
+`stickyHeaderIndices` ott a `ScrollView` saját implementációja); (2) a 26pt-os
+badge-ben a három betű Barlow Condensed Bold 11pt-tal középre esik-e; (3) a
+teljes szélességű kiemelt sor a mockup behúzott hátteréhez képest. Érvényben
+marad a korábbi lelet: a csomagolt betűkészletekből hiányzik az `ő`/`ű` glifa –
+ez itt az `Atomerőmű` sort érinti. Nyitva van még, hogy csak a 2025/2026-os
+szezonhoz van tabella az adatbázisban; a többi szezon üres állapotot mutat.
+
+**Commit:** `feat: Tabella képernyő`
+
+---
 
 ## 2026-09-02 – Arányjelző sáv gradienssel (`expo-linear-gradient`)
 
@@ -2345,3 +2407,102 @@ jön, de egy 6pt-os sávért egy Skia canvas nagyobb ár).
 **Következmény:** Natív modul: saját dev clientet újra kell buildelni. A
 `CLAUDE.md` tech stack felsorolása még nem említi.
 **Visszavonható?** Igen, a `ProgressBar` az egyetlen használati hely.
+
+## D-057 – A tabella sorai kliensoldalon deduplikálódnak
+**Dátum:** 2026-09-02
+**Döntés:** A `useStandings` helyezésenként **az első** elemet tartja meg a
+tabellaállás JSON tömbjéből, a további azonos helyezésűeket eldobja.
+**Miért:** A legfrissebb (26. forduló) és a 3. fordulós sorban minden csapat
+kétszer, karakterre azonos értékekkel szerepel – az import hibája. A mobil app
+csak olvas, javítani nem tudja, viszont 28 sort kirajzolni egy 14 csapatos
+bajnokságban nyilvánvalóan rossz.
+**Alternatíva:** Csapatnév szerinti kulcs (ugyanaz az eredmény, de a helyezés
+az egyedi mező), vagy a hiba figyelmen kívül hagyása és 28 sor kirajzolása
+(elfogadhatatlan). A valódi javítás a webprojekt importjában van.
+**Visszavonható?** Igen, a dedup a `toTeams()` néhány sora.
+
+## D-058 – A tabella a csapat rövid nevét mutatja
+**Dátum:** 2026-09-02
+**Döntés:** A névoszlopban a `teams.short_name` áll (`Falco`, `Kaposvár`,
+`Atomerőmű`), nem a `standings` JSON teljes neve. Ha a csapat nincs meg a
+listában, marad a tabella saját neve.
+**Miért:** A mockup nyolc oszlopos rácsában a névre ~126pt marad. A valódi
+teljes nevek (`Falco-Vulcano Energia KC Szombathely`,
+`Endo Plus Service-Honvéd`) ott csak levágva férnének el, tehát a sor első
+felében sem lenne olvasható a csapat. A mockup közepes hosszúságú nevei
+(`Falco-Vulcano Szombathely`) az adatbázisban nem léteznek.
+**Alternatíva:** Teljes név „…"-lel levágva (a mockup betűje szerinti, de
+olvashatatlan), vagy kétsoros név (elrontja az 56pt-os sormagasságot).
+**Visszavonható?** Igen, a `toTeams()` egyetlen mezője.
+
+## D-059 – A badge jele a rövid név három betűje, az ASE kivétel
+**Dátum:** 2026-09-02
+**Döntés:** A `teamAbbreviation()` a rövid név első három betűjét adja
+ékezet nélkül, nagybetűvel (`Körmend` → `KOR`, `Falco` → `FAL`). Egyetlen
+kivétel van, teljes névre kulcsolva: `Atomerőmű SE` → `ASE`.
+**Miért:** A mockup tíz csapatjelét egy szabály kiadja, kivéve a sajátunkat:
+az `Atomerőmű` mechanikusan `ATO` lenne, a bevett jelölés viszont `ASE` – a
+mockup és az app fejléce is így írja. Az ékezetlevágás nem kozmetika: a
+csomagolt betűkészletből hiányzik az `ő`/`ű` glifa, `ATOMERŐMŰ`-ből tofu lenne.
+**Alternatíva:** Teljes kézi jeltábla mind a 16 csapatra (új csapatnál
+karbantartani kell, és a tabellában olyan csapat is felbukkanhat, ami nincs a
+`teams` táblában), vagy kivétel nélküli szabály (`ATO`, ami a mockuptól tér el).
+**Visszavonható?** Igen, a kivételtábla egyetlen sor a `lib/format.ts`-ben.
+
+## D-060 – Csak a szezonhoz kötött tabella jelenik meg
+**Dátum:** 2026-09-02
+**Döntés:** A lekérdezés szigorúan `season_id`-re szűr. A webes `StandingsView`
+tartaléka – ha a szezonra nincs sor, mutasd a `season_id IS NULL` régi
+importokat – a mobilban **nincs meg**: ilyenkor üres állapot jön.
+**Miért:** A `season_id` nélküli 11 sor mind a 2025/2026-os szezon korábbi
+fordulóihoz tartozik (2025-11 … 2026-03). Ha egy másik szezon van kiválasztva a
+szűrőben, a tartalék **idegen szezon** tabelláját mutatná a szűrő felirata
+alatt – ez rosszabb, mint az őszinte üres állapot. A `CLAUDE.md` szerint minden
+lekérdezés szűrt.
+**Alternatíva:** A webes tartalék átvétele (félrevezető), vagy a régi sorok
+dátum szerinti szezonhoz rendelése a kliensen (találgatás, az importnak kell
+megjavulnia).
+**Visszavonható?** Igen, a `fetchStandings()` egyetlen `.eq()` hívása.
+
+## D-061 – Új token: `border.rowDeep` (#101E33)
+**Dátum:** 2026-09-02
+**Döntés:** A tabella sorelválasztójához új token került a palettába:
+`colors.border.rowDeep = '#101E33'`, Tailwindben `line-row-deep`.
+**Miért:** A mockup ezt a hexet írja, és a `CLAUDE.md` a pontos replikálást
+kéri. A hex eddig csak `shade.sheetHeader` néven létezett, de az a `shade` ág
+alatt van, aminek a doksija tiltja a közvetlen használatot, és a neve a sheet
+fejlécéről szól – egy sorelválasztóként félrevezető lenne. Az új token
+felvételére engedélyt kaptam.
+**Alternatíva:** A `shade.sheetHeader` újrahasznosítása (azonos szín, hibás
+név), vagy a meglévő `border.row` (#16233D – egy árnyalattal világosabb,
+eltérés a mockuptól).
+**Visszavonható?** Igen, egy token és egy Tailwind kulcs.
+
+## D-062 – A tabella lábléce a fordulószámot is kiírja
+**Dátum:** 2026-09-02
+**Döntés:** A lábléc „Frissítve: 2026. április 25. · 26. forduló" alakban áll,
+a mockup csak dátumos felirata helyett.
+**Miért:** Egy tabellaállás mindig egy fordulóhoz tartozik, és az adatbázis
+több fordulót is tárol – a dátumból nem derül ki, hányadik forduló utáni állást
+nézi a felhasználó (a 26. és a 3. fordulós sor például **azonos** dátumon áll).
+A kiegészítés a mockup tipográfiáján belül marad. Erre engedélyt kaptam.
+**Alternatíva:** Csak a dátum (a mockup betűje szerint, de kevesebb
+információ), vagy a forduló a cím alatti alcímbe (feltűnőbb hely, mint amit egy
+metaadat érdemel).
+**Visszavonható?** Igen, a képernyő egyetlen sablonsora.
+
+## D-063 – A kiemelt tabellasor teljes szélességű
+**Dátum:** 2026-09-02
+**Döntés:** A tabellasorok a képernyő teljes szélességét elfoglalják, a 16pt-os
+behúzás a sor **tartalmán** van. A kiemelt sor surface2 háttere és bal oldali
+2pt-os cián sávja ezért a kijelző széléig ér; az elválasztó vonalat külön,
+16pt-tal behúzott réteg rajzolja.
+**Miért:** A mockup a sávot `left:-16px`-szel, a lista behúzásán kívülre
+teszi. RN-ben a szülőn kilógó abszolút gyerek Androidon megbízhatatlanul
+renderelődik (a natív nézet levágja), ezért a sávnak a soron **belül** kell
+lennie – ehhez viszont a sornak a szélig kell érnie.
+**Alternatíva:** `overflow: 'visible'` és negatív pozíció (Androidon nem
+garantált), vagy a sáv elhagyása (a kiemelés fele veszne el).
+**Következmény:** A kiemelt sor háttere 16-16pt-tal szélesebb, mint a
+mockupban.
+**Visszavonható?** Igen, a `StandingsRow` elrendezése egy helyen áll.

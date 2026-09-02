@@ -47,6 +47,8 @@ export const colors = {
     hairline: '#0F2040',
     /** Sheet listasor elválasztója (szűrő bottom sheet mockup) */
     row: '#16233D',
+    /** Tabella sorelválasztója – a `row`-nál is halkabb (tabella mockup) */
+    rowDeep: '#101E33',
   },
   /** Modal / bottom sheet mögötti elsötétítés */
   scrim: 'rgba(2,6,14,0.6)',

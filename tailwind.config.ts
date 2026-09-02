@@ -41,6 +41,7 @@ const config: Config = {
       'line-strong': colors.border.strong,
       hairline: colors.border.hairline,
       'line-row': colors.border.row,
+      'line-row-deep': colors.border.rowDeep,
 
       scrim: colors.scrim,
       'cyan-deep': colors.shade.cyanDeep,
