@@ -1,9 +1,11 @@
 /**
  * Mentett AI riport kártyája – a webes `.ai-marker` kártya mobil párja.
  *
- * A mobil app riportot **nem generál**, csak olvassa a `game_text_reports`
- * sorait. A szöveg több ezer karakter is lehet, ezért alapból nyolc sorra
- * csuklik össze, és a kártya alján lévő gomb nyitja ki (D-049).
+ * A mobil app riportot **nem generál**, csak olvassa a `game_text_reports` és
+ * a `player_text_reports` sorait – a kártya mindkét riportfajtát megjeleníti,
+ * a fejléc felirata a `report_type`-ból jön. A szöveg több ezer karakter is
+ * lehet, ezért alapból nyolc sorra csuklik össze, és a kártya alján lévő gomb
+ * nyitja ki (D-049).
  */
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -14,6 +16,7 @@ import { colors, fontSize, letterSpacing, spacing, tapTarget, tracking } from '@
 import { usePressed } from '@/hooks/usePressed';
 import { formatDate } from '@/lib/format';
 import type { GameReport, GameReportType } from '@/types/games';
+import type { PlayerReport, PlayerReportType } from '@/types/players';
 
 /** Ennyi sor látszik összecsukott állapotban. */
 const COLLAPSED_LINES = 8;
@@ -24,15 +27,16 @@ const COLLAPSED_LINES = 8;
  */
 const EXPANDABLE_LENGTH = 360;
 
-const TYPE_LABELS: Record<GameReportType, string> = {
+const TYPE_LABELS: Record<GameReportType | PlayerReportType, string> = {
   pregame: 'Pregame scouting',
   postgame: 'Postgame elemzés',
   combined: 'Összesített riport',
+  season: 'Szezonelemzés',
   manual: 'Manuális elemzés',
 };
 
 interface ReportCardProps {
-  report: GameReport;
+  report: GameReport | PlayerReport;
 }
 
 export function ReportCard({ report }: ReportCardProps) {

@@ -75,7 +75,7 @@
 - [x] **Meccsek – lista** (`app/(tabs)/games/index.tsx`) – lejátszott meccsek + közelgő fixtures, StackedRow-val
 - [x] **Meccs részletei** (`app/(tabs)/games/[id].tsx`) – eredmény, negyedek, box score StatMatrix-ben, mentett pregame/postgame riport `GlowCard accent="ai"`-ban
 - [x] **Játékosok – lista** (`app/(tabs)/players/index.tsx`) – szezon-aggregált lista, rendezés, névkeresés. Mockup: `Jatekosok Lista`
-- [ ] **Játékos részletei** (`app/(tabs)/players/[id].tsx`) – szezonstatisztika, meccsenkénti bontás, mentett játékos-riportok
+- [x] **Játékos részletei** (`app/(tabs)/players/[id].tsx`) – szezonstatisztika, meccsenkénti bontás, mentett játékos-riportok
 - [ ] **Tabella** (`app/(tabs)/standings.tsx`) – bajnoki tabella StatMatrix-ben. Mockup: `Tabella`
 - [ ] **Elemzés** (`app/(tabs)/analysis/index.tsx`) – mentett AI riportok listája (pregame / postgame / játékos / csapat) + számított elemzések a `@core`-ból (szituációk, four factors, clutch)
 - [ ] Tab layout véglegesítése: 5 tab ikonokkal, aktív állapot cián glow-val, safe area alul
@@ -129,6 +129,71 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Játékos részletei képernyő
+
+**Mit:** Elkészült az S6 ötödik képernyője: a `players/[id]` helyőrző helyén
+most a játékos teljes szezonja áll – profilkártya, négy átlag-KPI, dobási
+bontás, további mutatók, meccsenkénti mátrix és a mentett riportok.
+
+*Adat.* Új hook: `usePlayerDetails`. A szezonösszesítés **nem** új lekérdezés,
+a `usePlayerData` cache-éből jön (D-046), így a listáról ide lépve a fejléc
+azonnal kirajzolódik. A meccsenkénti bontás viszont önálló lekérdezés a
+szezonspecifikus `player_game_stats_*` tábláról, beágyazott `games` sorral –
+a szűrés is ott történik (`games.season_id`, `games.our_team_id`), tehát a
+képernyő nem függ attól, hogy a Meccsek tab betöltött-e már (D-052). A
+riportok a `player_text_reports`-ból jönnek, játékosra és szezonra szűrve
+(D-054). Mindkettő szűrőpár + játékos kulcson cache-elődik.
+
+*Komponensek.* Öt új: `PlayerProfileCard` (mezszám-kör, teljes név,
+pozíció/kor/testadat, három keretszám), `ShootingPanel` (négy dobászóna
+találat/kísérlet + százalék + arányjelző sáv), `ProgressBar` (a `p0-style-tile`
+mockup 6pt-os sávja), `StatList` (címke–érték sorok kártyán, a webes „További
+Statisztikák" párja) és `PlayerGameLog` (a `BoxScore`-ral azonos oszlopú
+mátrix, fagyasztott ellenfél-oszloppal). A `ReportCard` mostantól a
+játékosriportot is megjeleníti, `Szezonelemzés` felirattal.
+
+**Eltérések, hiányok:**
+
+- A meccsbontás **alapból 10 meccset** mutat, a többit gomb nyitja (D-053):
+  egy szezon 50 sora × 13 cella egyszerre kirajzolva feleslegesen lassítja az
+  első megjelenést.
+- Az arányjelző sáv a mockup cián **gradiense helyett tömör** accent színnel
+  fut (D-055) – a gradienshez `expo-linear-gradient` kellene.
+- A mátrixban a **dátum színe** hordozza az eredményt (zöld/piros); mivel a
+  szín önmagában nem elég, a jelmagyarázat ki is írja.
+- Az ellenfél a csapatlista **rövid nevével** áll (`Kaposvár`), a `games`
+  tábla teljes nevével csak akkor, ha a rövid nem található.
+- A „További mutatók" `Ponthatékonyság` és `Védekezési index` sora a
+  `usePlayerData` saját képlete, **nem** NBA ORtg/DRtg – a felirat ezt mondja.
+
+**Fájlok:** `app/(tabs)/players/[id].tsx` (helyőrző helyett a képernyő),
+`hooks/usePlayerDetails.ts` (új), `components/{PlayerProfileCard,ShootingPanel,
+ProgressBar,StatList,PlayerGameLog}.tsx` (mind új), `components/ReportCard.tsx`
+(uniós riporttípus), `types/players.ts` (`PlayerGameRow`, `PlayerReport`)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan. A két lekérdezés
+élesben, a kliens anon kulcsával ellenőrizve: a beágyazott `games!inner` szűrés
+működik (BENKE Szilárd, 2025/2026, ASE → 50 sor, ebből 0 perces nincs; a
+csapat egészében 5 db 0 perces sor van, ezeket a bontás kiszűri), a
+`player_text_reports` az ASE keretéből 8 játékosnak ad `season` típusú
+riportot. `npx expo export` iOS-re és Androidra lefut; **mindkét** Hermes
+bundle tartalmazza a képernyő feliratait („Meccsenkénti bontás", „További
+mutatók", „Ponthatékonyság", „Kiharcolt szabálytalanság / meccs",
+„Szezonelemzés", „Nincs meg a játékos", „Ellenfél", „Középtávoli").
+
+**Nyitva maradt:** **Eszközön még nem futott.** Négy dolgot valós kijelzőn kell
+megítélni: (1) a 13 oszlopos mátrix vízszintes görgetése a 120pt-os fagyasztott
+oszloppal; (2) a profilkártya kétsoros neve a leghosszabb neveknél
+(`Gatling Shane Justin Stoney`); (3) a „További 40 meccs" gomb utáni
+újrarajzolás sebessége Androidon; (4) a 12 soros `StatList` hosszú címkéi
+(`Kiharcolt szabálytalanság / meccs`) egy sorban maradnak-e. Érvényben marad a
+korábbi lelet: a csomagolt betűkészletekből hiányzik az `ő`/`ű` glifa – ez a
+képernyőn a „Büntető" és az „Effektív mezőny (eFG%)" feliratot érinti.
+
+**Commit:** `feat: Játékos részletei képernyő`
+
+---
 
 ## 2026-09-02 – Játékosok lista képernyő
 
@@ -2170,3 +2235,62 @@ megtalálható az, akinek csak a kezdőbetűje látszik.
 (a 68pt-os sormagasság és a pozíció-alcím miatt szűk), vagy keskenyebb
 számoszlop (a 20pt-os mono négy karaktere alá nem megy).
 **Visszavonható?** Igen, egy hívás a `PlayerRow`-ban.
+
+## D-052 – A meccsenkénti bontás önálló lekérdezés, beágyazott `games` sorral
+**Dátum:** 2026-09-02
+**Döntés:** A `usePlayerDetails` a meccssorokat a szezonspecifikus
+`player_game_stats_*` tábláról kéri, a meccs keretadataival együtt
+(`games!inner(date, opponent, home_away, result, …)`), és a szűrés is a
+beágyazott soron történik: `games.season_id` + `games.our_team_id`. Az ellenfél
+rövid nevét a szűrő csapatlistája adja, ha megvan benne a teljes név.
+**Miért:** Így a képernyő nem függ attól, hogy a Meccsek tab betöltötte-e már a
+meccslistát – a `useGameDetails` fordítva jár el (a meccs sorát a lista
+cache-éből veszi), de ott a felhasználó mindig a listáról érkezik. Ide a
+Játékosok tabról jönnek, ahol a meccsek cache-e üres lehet: egy `useGameData`
+függés vagy egy második, felesleges hálózati kört indítana, vagy üres bontást
+mutatna. A `games.our_team_id` szűrés egyben a csapatot váltó játékosok idegen
+meccseit is kizárja.
+**Alternatíva:** `useGameData` cache-ből join (a meccslista teljes letöltésétől
+függne), vagy `game_id`-k szerinti második lekérdezés (két kör egy helyett).
+**Visszavonható?** Igen, a `fetchDetails()` egyetlen lekérdezése érinti.
+
+## D-053 – A meccsbontás 10 sorral indul, gombbal nyílik teljesre
+**Dátum:** 2026-09-02
+**Döntés:** A `PlayerGameLog` alapból a legutóbbi 10 meccset rajzolja ki, a
+többit a „További N meccs" gomb nyitja – visszazárás nincs.
+**Miért:** Egy szezon 50 meccse × 13 cella 650 `Text` elem, virtualizálás
+nélkül, egy amúgy is hosszú képernyő közepén. A stáb tipikusan a legutóbbi
+néhány meccset nézi; a teljes szezon egy koppintásra van. Ugyanaz a minta, mint
+a riportkártya összecsukott szövege (D-049).
+**Alternatíva:** Minden sor kirajzolása (lassabb első megjelenés), vagy
+`FlatList` virtualizálással (a `ScrollView`-ba ágyazott lista mérete
+meghatározatlan lenne, és a fagyasztott oszlop szinkronja is elveszne).
+**Visszavonható?** Igen, a `COLLAPSED_ROWS` konstans.
+
+## D-054 – A riportkártya közös, és a játékosriport csak játékosra + szezonra szűr
+**Dátum:** 2026-09-02
+**Döntés:** A `ReportCard` `GameReport | PlayerReport` uniót fogad, a
+feliratmap kiegészült a `season` (`Szezonelemzés`) típussal. A
+`player_text_reports` lekérdezése `player_id` + `season_id` szerint szűr,
+`team_id` szerint **nem**.
+**Miért:** A két riport megjelenítése karakterre azonos (lila sáv, típusfelirat,
+dátum, összecsukott szöveg) – két külön komponens csak duplikáció lenne. A
+`team_id` oszlop nullázható (a riport csapat nélkül is menthető a webről), egy
+`.eq('team_id', …)` szűrés tehát némán eldobná ezeket a sorokat; a `player_id`
+amúgy is szűkebb szűrő, mint a csapat.
+**Alternatíva:** Külön `PlayerReportCard` (duplikáció), vagy `team_id`-ra is
+szűrés `.or('team_id.is.null,…')`-lel (bonyolultabb, és nem ad többet).
+**Visszavonható?** Igen, a `ReportCard` propja és a lekérdezés egy sora.
+
+## D-055 – Az arányjelző sáv tömör színnel fut, gradiens nélkül
+**Dátum:** 2026-09-02
+**Döntés:** A `ProgressBar` kitöltése tömör accent szín, nem a mockup
+`linear-gradient(90deg,#0096B8,#00D4FF)` átmenete és nem is a hozzá tartozó
+külső glow.
+**Miért:** A gradienshez `expo-linear-gradient` (új csomag) kellene, a színes
+elmosott glow-t pedig RN egyik platformon sem adja megbízhatóan (D-005). A sáv
+szerepe az arány leolvashatósága, ehhez a tömör szín elég.
+**Alternatíva:** `expo-linear-gradient` felvétele (engedélyköteles, és egy
+6pt-os sávért nem éri meg), vagy két egymásra rétegzett félig átlátszó nézet
+(nem ad valódi átmenetet).
+**Visszavonható?** Igen, a `ProgressBar` kitöltő nézete az egyetlen hely.
