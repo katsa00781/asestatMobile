@@ -74,7 +74,7 @@
 - [x] **Ma** (`app/(tabs)/index.tsx`) – következő/legutóbbi meccs kártya, csapat KPI-ok StatTile-okban, gyors belépési pontok. Mockup: `Ma Screen`
 - [x] **Meccsek – lista** (`app/(tabs)/games/index.tsx`) – lejátszott meccsek + közelgő fixtures, StackedRow-val
 - [x] **Meccs részletei** (`app/(tabs)/games/[id].tsx`) – eredmény, negyedek, box score StatMatrix-ben, mentett pregame/postgame riport `GlowCard accent="ai"`-ban
-- [ ] **Játékosok – lista** (`app/(tabs)/players/index.tsx`) – szezon-aggregált lista, rendezés, névkeresés. Mockup: `Jatekosok Lista`
+- [x] **Játékosok – lista** (`app/(tabs)/players/index.tsx`) – szezon-aggregált lista, rendezés, névkeresés. Mockup: `Jatekosok Lista`
 - [ ] **Játékos részletei** (`app/(tabs)/players/[id].tsx`) – szezonstatisztika, meccsenkénti bontás, mentett játékos-riportok
 - [ ] **Tabella** (`app/(tabs)/standings.tsx`) – bajnoki tabella StatMatrix-ben. Mockup: `Tabella`
 - [ ] **Elemzés** (`app/(tabs)/analysis/index.tsx`) – mentett AI riportok listája (pregame / postgame / játékos / csapat) + számított elemzések a `@core`-ból (szituációk, four factors, clutch)
@@ -129,6 +129,72 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Játékosok lista képernyő
+
+**Mit:** Elkészült az S6 negyedik képernyője: a `Játékosok` tab helyőrzője
+helyén most a szezon-aggregált keret áll, a `Jatekosok Lista` mockup szerint –
+cím + létszám, névkereső, öt rendezés-chip, oszlopfejléc, majd a játékossorok.
+
+*Adat.* Új lekérdezés **nincs**: a meglévő `usePlayerData` szűrőpáronkénti
+cache-e adja a listát, a keresés és a rendezés kliensoldali (egy csapat egy
+szezonban ~15 sor). A `usePlayerData` alapból pontátlag szerint rendez, a chip
+ezt írja felül.
+
+*Keresés.* Új `lib/search.ts`: kis-nagybetű és **ékezet nélküli** összevetés
+(„vojvoda" megtalálja a „VOJVODA D."-t), a magyar ékezetek kézzel leképezve –
+a `normalize('NFD')` a Hermes eltérő ICU-támogatása miatt nem megbízható,
+ugyanaz a megfontolás, mint a dátumformázásnál (D-039).
+
+*Komponensek.* Három új, mind a mockupból: `SearchField` (44pt-os mező bal
+oldali nagyítóval), `ChipRow` (vízszintesen görgethető chipsor, aktív elem
+cián glow réteggel és lefelé mutató ikonnal) és `PlayerRow` (a `StackedRow`-ra
+épülő sor, mezszám-körrel és három átlagoszloppal). Az oszlopfejléc a meglévő
+`StackedRowHeader` – ez az első éles használata. A rendezési szempontok
+katalógusa a `data/player-sorts.ts`-ben él, chip- és oszlopfelirattal együtt.
+
+*Navigáció.* A sor a `players/[id]` útvonalra lép, ami egyelőre `PlaceholderScreen`
+– a játékos részletei a következő feladat.
+
+**Eltérések, hiányok:**
+
+- A **harmadik oszlop követi a rendezést**: `PERC` vagy `HATÉKONYSÁG` chipnél az
+  `APG` helyére az a szám lép, ami szerint a sorrend áll (D-050). A mockup
+  mindig PPG / RPG / APG-t mutat, akkor is, ha a rendezés láthatatlan érték
+  szerint történik.
+- A **név rövidítve** áll a sorban (`EILINGSFELD J.`), ahogy a box score-ban
+  (D-051): a mockup 48pt-os számoszlopai mellett ~94pt marad a névnek, a valódi
+  keretben pedig 27 karakteres nevek is vannak.
+- A keresés a **teljes névre** illik, nem csak a rövidített alakra, tehát a
+  keresztnévvel is megtalálható a játékos.
+- Az adatbázisban néhány név hibás kisbetűvel jött be az importból
+  (`SEPPäLä`, `MESZLéNYI`); ezt a mobil app nem javítja, mert csak olvas.
+
+**Fájlok:** `app/(tabs)/players/index.tsx` (helyőrző helyett a képernyő),
+`app/(tabs)/players/[id].tsx` (új helyőrző), `components/{SearchField,ChipRow,PlayerRow}.tsx`
+(mind új), `data/player-sorts.ts` (új), `lib/search.ts` (új)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan. Az adat élesben,
+a kliens anon kulcsával ellenőrizve: a `player_season_stats_by_season` a
+2025/2026-os keretre 14 sort ad, a `total_minutes` egész perc (átlag 24–32),
+az `avg_valuation` már meccsátlag – tehát a formázás egy tizedesre helyes.
+`npx expo export` iOS-re és Androidra lefut; **mindkét** Hermes bundle
+tartalmazza a képernyő feliratait (ékezetesekre UTF-16-ban is keresve):
+„Játékos keresése", „Rendezés", „Lepattanó", „Assziszt", „Hatékonyság",
+„Nincs találat", „Nincs játékos", „PPG".
+
+**Nyitva maradt:** **Eszközön még nem futott.** Három dolgot valós kijelzőn
+kell megítélni: (1) a leghosszabb rövidített nevek (`EILINGSFELD J.`,
+14 karakter) beleférnek-e a ~94pt-os névsávba, vagy levágódnak; (2) a
+billentyűzet nyitva marad-e a chipek koppintásakor
+(`keyboardShouldPersistTaps="handled"` van beállítva); (3) a chipsor vízszintes
+görgetése az ötödik chipig. Érvényben marad a korábbi lelet is: a csomagolt
+betűkészletekből hiányzik az `ő`/`ű` glifa – ez a képernyőn a szűrő-chip
+csapatnevét érinti, a saját feliratai mind elkerülik ezt a két betűt.
+
+**Commit:** `feat: Játékosok lista képernyő`
+
+---
 
 ## 2026-09-02 – Meccs részletei képernyő
 
@@ -2073,3 +2139,34 @@ szövegnél a gomb csak zavarna. A szöveg nyers bekezdésekként jelenik meg
 mindig teljes szöveg (a szekció használhatatlanul hosszú lenne).
 **Visszavonható?** Igen, egy propra kivezethető.
 
+## D-050 – A harmadik számoszlop követi a rendezést
+**Dátum:** 2026-09-02
+**Döntés:** A játékoslista három numerikus oszlopa alapból PPG / RPG / APG.
+Ha a rendezés `PERC` vagy `HATÉKONYSÁG` – tehát nem a látható három egyike –,
+az `APG` helyére az aktív szempont lép (`PERC`, illetve `ÉRT`).
+**Miért:** A mockup mind az öt chiphez ugyanazt a három oszlopot mutatja, így a
+`PERC` és a `HATÉKONYSÁG` szerinti sorrend olyan szám szerint állna, amit a
+felhasználó sehol nem lát – egy 14 soros listában ez rendezetlennek látszik.
+A sorra három oszlop fér el (48pt-os oszlop + 16pt köz, 20pt-os JetBrains Mono
+mellett a `26.5` alak pont 48pt), negyediknek nincs hely.
+**Alternatíva:** Mockup-hű fix három oszlop (láthatatlan rendezés), vagy az
+aktív oszlop cián kiemelése (a mockup sorai egységesen `text.primary`-k), vagy
+a chipek szűkítése háromra (elveszne a perc és a hatékonyság szerinti sorrend).
+**Visszavonható?** Igen, a `data/player-sorts.ts` `visibleColumns()`-a az
+egyetlen hely, ami erről dönt.
+
+## D-051 – A játékoslista rövidített nevet mutat
+**Dátum:** 2026-09-02
+**Döntés:** A `PlayerRow` a `shortenPlayerName()` alakját írja ki
+(`Payton Jr Chris Joseph` → `Payton J.`), ugyanúgy, mint a box score
+fagyasztott oszlopa. A teljes név a játékos részletei képernyőre marad.
+**Miért:** A mockup sorában a 32pt-os mezszám-kör és a három 48pt-os
+számoszlop után ~94pt marad a névnek. A valódi keretben a nevek átlagosan
+15, legrosszabb esetben 27 karakteresek (`Gatling Shane Justin Stoney`), tehát
+a teljes név a sorok felénél levágódna – a rövidítés legalább egységes és
+kiszámítható. A **keresés a teljes névre** illik, így a keresztnévvel is
+megtalálható az, akinek csak a kezdőbetűje látszik.
+**Alternatíva:** Teljes név „…"-vel (fél lista levágva), kétsoros név
+(a 68pt-os sormagasság és a pozíció-alcím miatt szűk), vagy keskenyebb
+számoszlop (a 20pt-os mono négy karaktere alá nem megy).
+**Visszavonható?** Igen, egy hívás a `PlayerRow`-ban.
