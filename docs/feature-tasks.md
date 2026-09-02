@@ -80,7 +80,7 @@
 - [x] **Elemzés – hub** (`app/(tabs)/analysis/index.tsx`) – a mentett AI riportok listája egy helyen (meccs / csapat / játékos), fajta szerinti szűrő-chipekkel
 - [x] **Riportolvasó** (`app/(tabs)/analysis/[id].tsx`) – egy riport teljes szövege, szekciócímekkel és megállapítás-listával
 - [x] **Elemzés – Szituációk** (`app/(tabs)/analysis/situational.tsx`) – a P12 „Számított elemzések" szekciójának első sora és a P13 képernyő: hazai/vendég összehasonlítás, szoros/kiütéses és félidei helyzetek, negyedbontás, four factors (`@core/situational-analysis`)
-- [ ] **Elemzés – Ellenfél scouting** – a következő ellenfél erősségei és gyengéi (`@core/pregame-scouting`)
+- [x] **Elemzés – Ellenfél scouting** (`app/(tabs)/analysis/scouting.tsx`) – a következő ellenfél erősségei és gyengéi (`@core/pregame-scouting`)
 - [ ] **Elemzés – Szerepkör-elemzés** – ki mit tesz hozzá a csapatjátékhoz (`@core/team-analysis`)
 - [ ] Clutch bontás a **Meccs részletein** (`@core/kosarstat-clutch-parse`) – szezonszintű clutch nézet nincs (D-069)
 - [ ] Tab layout véglegesítése: 5 tab ikonokkal, aktív állapot cián glow-val, safe area alul
@@ -134,6 +134,109 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Ellenfél scouting képernyő (számított elemzések, 2/3)
+
+**Mit:** Elkészült a P12 „Számított elemzések" szekciójának második sora és a
+mögötte álló képernyő: a `@core/pregame-scouting` teljes pregame modellje
+mobilon. Az Elemzés hubon most két navigációs sor áll (Szituációk, Ellenfél
+scouting). A képernyő tetején ellenfélsáv, alatta szegmentált kontroll három
+nézettel.
+
+*Adat.* Új hook: `useScoutingData`. Három lekérdezés fut, mind a kiválasztott
+szezonra: (1) `games` – csapatonként meccsszám, mérleg, szerzett és kapott
+pont; (2) a szezon `player_game_stats` táblája – **csapatösszegzéshez**,
+meccsenként a csapathoz kötve; (3) `player_season_stats_by_season` – a
+keretek játékossorai (pozíció, magasság). A modell percentilis-mezőnye a liga
+**összes** csapatából épül (`buildTeamBenchmarks`), ezért ez az egyetlen
+képernyő, ahol a lekérdezés nem szűkül egy csapatra (D-077). A csapatösszegek
+szándékosan **nem** a szezonösszesítő view-ból jönnek: abból hiányoznak a
+szezon közben távozott játékosok sorai, így a csapatok 0–40%-kal alulmérnének
+(D-078). Az adat szezononként cache-elődik: az ellenfél váltása nem indít új
+lekérdezést, csak újraszámol.
+
+*Megjelenítési modell.* Új modul: `lib/scouting-view.ts` – tiszta, hálózat
+nélküli fájl, ami a `ScoutingReport`-ból kész sorokat, badge-feliratokat,
+lábjegyzeteket és a három összegző szöveget állítja elő. A képernyő csak
+elrendez.
+
+*Szegmensek.* **Áttekintés**: szembeállított fejléc (mérleg), győzelmi esély
+arányjelző sávval és bizonyosság-badge-dzsel, a két csapat stílusprofilja
+badge-ekben, végül kilenc szembeállított metrikasor. **Terv**: az ellenfél
+veszélyforrásai, támadható pontjai, a fókuszpontok és a „ha bekövetkezik"
+forgatókönyvek válaszlépésekkel. **Kulcsemberek**: az ellenfél kulcsemberei
+szerepkörönként, a legalább 80 percet játszott emberei 36 percre vetítve
+(`StatMatrix`), és a poszt-összehasonlítás VAL/36-ban. Mindhárom nézet alján
+lábjegyzet mondja meg, mekkora mintán áll, és egy `Megállapítás` kártya
+foglalja össze a látottakat.
+
+*Komponensek.* Öt új: `OpponentBar` (az ellenfélsáv), `OpponentSheet`
+(ellenfélválasztó bottom sheet), `ChancePanel`, `ProfilePanel`, `PointList`.
+A `SplitHeader`, a `SplitMetricRow`, a `StatMatrix`, az `InsightCard` és a
+`SegmentedControl` változatlanul a Szituációk képernyőről jön.
+
+**Eltérések, hiányok:**
+
+- **Az ellenfél nem csak a következő találkozóé**: alapból a menetrend
+  következő ellenfele, ennek híján a legutóbbi meccsé, de a felső sávról
+  bármelyik ligacsapatra átváltható (D-080). A jelenlegi adatban a futó
+  szezonhoz nincs jövőbeli forduló, e nélkül a képernyő üresen állna.
+- A **tempó** és a **támadólepattanó-arány** nem látszik: mindkettőhöz az
+  ellenfelek dobás- és lepattanóadata kellene, ami a csapatperspektívánként
+  tárolt `games` sorokból nem áll össze megbízhatóan (D-079).
+- A `Megállapítás` szövege itt is **sablonból** áll össze a modell számaiból,
+  nem AI-ból (D-076 mintája).
+- A `@core` mondatai `→` és `≈` jelet használnak, ami egyik csomagolt
+  betűkészletben sincs meg – ezért minden átvett szöveg a `report-format`
+  `plainText`-jén megy át (a `≈` → `~` pótlás most került a táblába).
+- A `Fixture` típus új mezőt kapott (`opponentId`): a scouting a menetrendből
+  csapat-azonosítót kér, nem nevet.
+
+**Fájlok:** `app/(tabs)/analysis/scouting.tsx` (új),
+`app/(tabs)/analysis/index.tsx` (második navigációs sor),
+`hooks/useScoutingData.ts` (új), `lib/scouting-view.ts` (új),
+`types/scouting.ts` (új), `components/{OpponentBar,OpponentSheet,ChancePanel,
+ProfilePanel,PointList}.tsx` (mind új), `lib/report-format.ts` (`plainText`
+export, `≈` pótlás), `hooks/useGameData.ts` + `types/games.ts`
+(`Fixture.opponentId`)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan. A teljes lánc
+(három lekérdezés → `analyzePreGameScouting` → `buildScoutingView`) élesben, a
+kliens anon kulcsával lefuttatva **mind az 5 szezonra**, az ASE **összes
+ellenfelére**: 2025/2026-ban 15, 2024/2025-ben 13 párosítás, sehol `NaN`,
+`Infinity` vagy `undefined`, és minden ellenfélhez van keret. A két üres
+szezon (2023/2024, 2026/2027) az üres állapotra fut, a 2022/2023 pedig már a
+tábla-mappingnél kiesik (nincs szezontáblája). Mennyiségek és idők laptopról:
+2025/2026 – 723 meccssor, 7402 játékos-meccssor, 275 keretsor, 1.2 s; a
+lekérdezés `games!inner()` alakkal szűr szezonra, üres beágyazással, tehát
+nincs plusz mező a válaszban. A csapatösszegzés forrását méréssel választottuk
+ki: a szezonösszesítő view az ASE 26 pályára lépett játékosából csak 13-at
+tartalmaz, így a csapat pontösszege 3820 az 5211 helyett – a `games` tábla és
+a meccsenkénti játékossorok viszont pontosan egyeznek (5211 = 5211). A
+hiányzó glifák a betűfájlok `cmap` táblájából ellenőrizve: a `→` és a `≈`
+egyik csomagolt betűkészletben sincs meg, a helyükre tett `–` és `~` viszont
+mindegyikben; a kész nézetben Latin-1 fölött már csak a `−` és a `–` marad.
+`npx expo export` iOS-re és Androidra lefut; mindkét Hermes bundle tartalmazza
+a képernyő feliratait („Ellenfél scouting", „Győzelmi esély", „Az ellenfél
+veszélyforrásai", „Támadható pontjai", „Fókuszpontok", „Ha bekövetkezik",
+„Kulcsemberek", „Következő ellenfél", „Közepes bizonyosság") és a
+szezontáblát.
+
+**Nyitva maradt:** **Eszközön még nem futott.** Négy dolgot valós kijelzőn kell
+megítélni: (1) a 2.4 MB-os szezonlekérdezés érzete mobilhálózaton – első
+megnyitáskor a skeleton alatt fut, utána cache-ből jön; (2) a hosszú
+ligacsapatnevek az ellenfélsávban és a szembeállított fejlécben („Falco-Vulcano
+Energia KC Szombathely" egy sorra vágva); (3) a `ProfilePanel` badge-einek
+tördelése 390pt alatt, amikor öt stílusjegy is van; (4) a 16 soros
+ellenfélválasztó sheet görgetése Androidon, a hardveres back gombbal együtt.
+Érvényben marad a korábbi lelet: a csomagolt betűkészletekből hiányzik az
+`ő`/`ű` glifa – ez itt a „Következő ellenfél", az „Erőcsatár" és a
+„veszélyforrások" szövegét érinti. A P12 lila aktív tab-állapota továbbra is
+nyitva van.
+
+**Commit:** `feat: Ellenfél scouting képernyő`
+
+---
 
 ## 2026-09-02 – Szituációk képernyő (számított elemzések, 1/3)
 
@@ -2888,3 +2991,82 @@ AI hívás – a mobil scope-on kívül van.
 vezetni; nyelvi finomságokat (pl. a negyedek „az N3" névelője) kézzel kell
 kezelni.
 **Visszavonható?** Igen, három függvény a view modulban.
+
+## D-077 – A scouting lekérdezése liga-szintű, nem csapatra szűkített
+**Dátum:** 2026-09-02
+**Döntés:** A `useScoutingData` a kiválasztott szezon **összes** csapatának
+meccs- és statisztikasorát lekéri, nem csak a saját csapatét és az ellenfélét.
+**Miért:** A `@core/pregame-scouting` minden megállapítása (tempó, stílus,
+veszélyforrás, támadható pont, győzelmi esély) percentilishez van kötve, amit a
+`buildTeamBenchmarks` a liga mezőnyéből számol. Két csapatból nincs mezőny: a
+modell mindenre 50. percentilist mondana, és a képernyő tartalom nélkül
+maradna. A `CLAUDE.md` „minden lekérdezés szűrt `season_id` és `team_id`
+szerint" szabályából a szezonszűrés így is megvan, a csapatszűrés nem.
+**Alternatíva:** (a) benchmark nélküli futtatás – üres riport; (b) a mezőny
+előszámítása szerveroldalon – a mobil app nem ír sémát és nincs API route-ja.
+**Következmény:** A legnagyobb szezon 7402 játékos-meccssor (~2.4 MB) egyetlen
+lekérdezésben, nyolc lapozott körben. Ezért fut lustán: csak ezen a képernyőn,
+és szezononként egyszer, a cache élettartamára.
+**Visszavonható?** Igen, de csak a képernyő elhagyásával együtt.
+
+## D-078 – A csapatösszegzés a meccsenkénti sorokból jön, nem a szezon view-ból
+**Dátum:** 2026-09-02
+**Döntés:** A `TeamSeasonStat` volumenmezői (dobás, lepattanó, assziszt,
+labdaeladás, fault, valuation) a szezon `player_game_stats` táblájából
+állnak össze, meccsenként a `games.our_team_id`-hoz kötve. A meccsszám, a
+mérleg, a szerzett és a kapott pont a `games` tábláé. A keretek játékossorai
+maradnak a `player_season_stats_by_season` view-ban.
+**Miért:** A view a `players` tábla aktuális sorain áll, ezért a szezon közben
+távozott játékosok statisztikája hiányzik belőle. Méréssel: az ASE 2025/2026-ban
+26 játékossal lépett pályára, a view 13-at tartalmaz, a csapat pontösszege
+3820 az 5211 helyett; csapatonként 0–42% a hiány, tehát a percentilis-mezőny
+is torzulna. A meccsenkénti sorok összege ugyanakkor pontosan kiadja a `games`
+tábla pontösszegét (5211 = 5211).
+**Alternatíva:** (a) a view használata – olcsóbb (275 sor), de hibás mezőnyt
+ad; (b) szerveroldali aggregálás – a PostgREST-en az aggregátumok tiltva
+vannak (`Use of aggregate functions is not allowed`), az RPC pedig sémaírás.
+**Következmény:** Nagyobb letöltés (lásd D-077), cserébe a web pregame
+számaival egyező bemenet. A keretlistához a view marad a jó forrás: a scouting
+az **aktuális** keretre kérdez, és a pozíció meg a testmagasság csak onnan jön.
+**Visszavonható?** Igen, a `fetchScouting` két összegzője.
+
+## D-079 – A tempó és a támadólepattanó-arány nem jelenik meg
+**Dátum:** 2026-09-02
+**Döntés:** A `teamStats` kilenc mezőjéből a képernyő hetet mutat; a `pace` és
+az `orebRate` kimarad.
+**Miért:** A `@core` mindkettőt az **ellenfelek** adatából számolja
+(`TeamSeasonStat.opponent`), amit az adatbázisból nem lehet megbízhatóan
+előállítani: a `games` tábla csapatperspektívánként tárol, a tükörsor
+párosítása névegyezésen múlna, és méréssel a szezon 723 sorából 131 nem
+párosítható (egy csapat neve az importokban kétféleképpen szerepel). Az
+`opponent` blokk nélkül a `pace` a valós fele, az `orebRate` pedig minden
+csapatnál 100%. Mivel a torzítás minden csapatnál azonos, a **percentilisek**
+érvényesek maradnak – a modell megállapításai tehát jók, csak ez a két
+abszolút szám nem mutatható meg.
+**Alternatíva:** (a) a tükörmeccsek párosítása – 82%-os fedettség, csúszó
+nevezőkkel; (b) a két szám kiírása úgy, ahogy van – félrevezető.
+**Következmény:** A szembeállított sorokban birtoklás-független mutatók
+állnak (eFG%, hármas arány és %, büntetőráta, assziszt arány, labdaeladás %),
+plusz a pontátlagok a `games` tábláról.
+**Visszavonható?** Igen, ha a webprojekt egyszer ellenfél-oldali összegzést is
+ír a sémába.
+
+## D-080 – Az ellenfél választható, nem csak a következő találkozóé
+**Dátum:** 2026-09-02
+**Döntés:** A képernyő alapból a menetrend következő ellenfelét elemzi, ennek
+híján a legutóbb lejátszott meccs ellenfelét, de a felső sávról bármelyik
+ligacsapatra át lehet váltani (`OpponentSheet`).
+**Miért:** A feladatlista „a következő ellenfél" elemzését kéri, az adatban
+viszont a futó szezonhoz nincs jövőbeli forduló (a menetrend következő
+fordulói már a rákövetkező szezon `season_id`-ján állnak, amihez nincs
+statisztika). Fix „következő ellenfél" logikával a képernyő a valós adaton
+mindig üres lenne, korábbi szezonokban pedig értelmezhetetlen. A választó
+egyben a webes pregame szekció viselkedését hozza: ott is legördülőből jön az
+ellenfél.
+**Alternatíva:** (a) szigorúan a következő forduló – üres képernyő; (b) csak a
+legutóbbi ellenfél – nem az, amit a feladat kér.
+**Következmény:** Az ellenfélsáv eyebrow-ja mondja meg, honnan jött a
+választás („Következő ellenfél" / „Legutóbbi ellenfél" / „Választott
+ellenfél"). A választás nem perzisztálódik: a képernyő elhagyásával
+visszaáll az alapértelmezés.
+**Visszavonható?** Igen, a `useScoutingData` `fallback` blokkja.

@@ -41,6 +41,8 @@ export interface Fixture {
   /** A kiválasztott csapat szemszögéből. */
   isHome: boolean;
   opponentName: string;
+  /** Az ellenfél csapat-azonosítója – az ellenfél scouting ebből indul. */
+  opponentId: string;
   status: 'scheduled' | 'postponed';
 }
 

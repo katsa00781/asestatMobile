@@ -247,6 +247,7 @@ function toFixtures(
         homeTeamName: names.get(home_team_id) ?? 'Ismeretlen csapat',
         awayTeamName: names.get(away_team_id) ?? 'Ismeretlen csapat',
         isHome,
+        opponentId,
         opponentName: names.get(opponentId) ?? 'Ismeretlen csapat',
         status,
       },

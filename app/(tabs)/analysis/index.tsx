@@ -6,14 +6,14 @@
  * és a riportkártyák, a legfrissebb elöl. Egy kártya a riportolvasót nyitja.
  *
  * A P12 „Számított elemzések" szekciójából csak az elkészült képernyők sora
- * áll itt: most a Szituációk. Az ellenfél scouting és a szerepkör-elemzés a
- * saját feladatában kerül be – halott navigációs sor nincs (D-066, D-073).
+ * áll itt: a Szituációk és az Ellenfél scouting. A szerepkör-elemzés a saját
+ * feladatában kerül be – halott navigációs sor nincs (D-066, D-073).
  */
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Crosshair, FileSearch, Sparkles } from 'lucide-react-native';
+import { Crosshair, FileSearch, Sparkles, Swords } from 'lucide-react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { ChipRow } from '@/components/ChipRow';
@@ -67,6 +67,14 @@ export default function AnalysisScreen() {
         description="Hazai/vendég, helyzetek, negyedbontás"
         tone="cyan"
         onPress={() => router.push('/analysis/situational')}
+        style={styles.navRowStacked}
+      />
+      <NavRow
+        icon={Swords}
+        title="Ellenfél scouting"
+        description="Esély, veszélyforrások, kulcsemberek"
+        tone="orange"
+        onPress={() => router.push('/analysis/scouting')}
         style={styles.navRow}
       />
 
@@ -169,6 +177,10 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     marginHorizontal: spacing[4],
+  },
+  navRowStacked: {
+    marginHorizontal: spacing[4],
+    marginBottom: spacing[2],
   },
   navRow: {
     marginHorizontal: spacing[4],

@@ -46,6 +46,7 @@ const GLYPH_FALLBACKS: Record<string, string> = {
   '✓': '+',
   '↺': '±', // ±
   '✗': '−', // − tipográfiai mínusz
+  '≈': '~', // ≈ hullámvonal
   '️': '', // variation selector
   '⃣': '', // combining enclosing keycap
 };
@@ -92,6 +93,16 @@ export function reportSummary(narrative: string): string {
   if (!paragraph) return '';
 
   return firstSentence(paragraph.text);
+}
+
+/**
+ * Egyetlen sor megjelenítésre készen: a hiányzó glifák pótolva. A `@core`
+ * modulok magyar mondatai (pl. az ellenfél scouting veszélyforrásai) is
+ * használnak `→` és `≈` jelet, ezek egyik csomagolt betűkészletben sincsenek
+ * meg – ugyanaz a lelet, mint a riportoknál.
+ */
+export function plainText(text: string): string {
+  return normalizeGlyphs(text.replace(/\*\*/g, '').trim());
 }
 
 function toBlock(line: string): ReportBlock | null {
