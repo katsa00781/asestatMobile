@@ -34,6 +34,7 @@ import { Check } from 'lucide-react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { ErrorPanel } from '@/components/ErrorPanel';
+import { SkeletonBlock } from '@/components/SkeletonBlock';
 import { colors, duration, fontSize, letterSpacing, radius, tracking } from '@/constants/theme';
 import { useFilterData } from '@/hooks/useFilterData';
 import { usePressed } from '@/hooks/usePressed';
@@ -312,13 +313,13 @@ function SectionDivider() {
   );
 }
 
-/** Betöltés alatti helykitöltő. A shimmert az S5 `SkeletonBlock`-ja hozza majd. */
+/** Betöltés alatti helykitöltő – a sheet surface2 felületén surface3 blokk. */
 function PlaceholderRows({ count }: { count: number }) {
   return (
     <View>
       {Array.from({ length: count }, (_, index) => (
         <View key={index} style={styles.row}>
-          <View style={styles.placeholderBar} />
+          <SkeletonBlock width="55%" height={12} surface="surface3" />
         </View>
       ))}
     </View>
@@ -391,11 +392,5 @@ const styles = StyleSheet.create({
   },
   divider: {
     marginVertical: 18,
-  },
-  placeholderBar: {
-    width: '55%',
-    height: 12,
-    borderRadius: radius.sm,
-    backgroundColor: colors.bg.surface3,
   },
 });

@@ -63,7 +63,7 @@
 - [x] `components/StackedRow.tsx` – listaelem, függőlegesen csoportosított adatokkal (a `DataTable` sor mobil párja)
 - [x] `components/StatMatrix.tsx` – vízszintesen görgethető statisztikai mátrix **fagyasztott első oszloppal**; iOS és Android görgetés-szinkron ellenőrzése
 - [x] `components/Badge.tsx` – 7 variáns (cyan / orange / ai / positive / negative / warning / neutral)
-- [ ] `components/SkeletonBlock.tsx` – shimmer betöltés (Reanimated)
+- [x] `components/SkeletonBlock.tsx` – shimmer betöltés (Reanimated)
 - [x] `components/EmptyState.tsx` – üres állapot ikonnal és szöveggel
 - [ ] Tap target audit: minden interaktív elem ≥ 44×44pt vagy `hitSlop`-pal kiegészítve
 
@@ -129,6 +129,62 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Betöltési helyőrző (`SkeletonBlock`)
+
+**Mit:** Elkészült a `components/SkeletonBlock.tsx`, az első betöltés
+shimmerje (a `CLAUDE.md` szerint spinner csak háttérfrissítésnél jár). Mockup
+ehhez nem készült, a megjelenésre rákérdeztem, a választott irány a gradiens
+sweep: tompa felület-blokk, amin balról jobbra végigfut egy lágy fénysáv,
+`duration.shimmer` (1200ms) ciklussal, lineáris ütemezéssel, végtelen
+ismétléssel (D-037).
+
+A sáv `react-native-svg` lineáris gradiens (átlátszó → `text.primary` 6%-on →
+átlátszó), mert egy sima `View` sávnak kemény éle lenne; a csomag már fent
+volt, a `FilterSheet` elválasztója is ezt használja. A sáv úthossza a blokk
+mért szélessége (`onLayout` → state, majd a worklet a számot zárja körbe –
+ugyanaz a minta, mint a `FilterSheet` magasságánál), így −szélességtől
++szélességig fut. Amíg nincs mérés, csak az alapfelület látszik.
+
+Props: `height` (alap 12), `width` (alap `100%`), `corner` (a radius-skálából,
+alap `sm`), `surface` (`surface2` a base/surface1 hátterű képernyőkön,
+`surface3` a surface2 hátterű sheetben) és elhelyezésre a `style`. A blokk
+képernyőolvasó elől rejtve van (`accessibilityElementsHidden` +
+`importantForAccessibility="no-hide-descendants"`): a betöltés tényét a
+képernyő saját szövege mondja el, nem hét néma doboz.
+
+Ugyanebben a lépésben a `FilterSheet` ideiglenes `placeholderBar`-ját
+lecseréltem valódi `SkeletonBlock`-ra (`surface="surface3"`, 55% × 12) – ez a
+korábbi „a shimmert az S5 hozza majd" TODO lezárása.
+
+**Fájlok:** `components/SkeletonBlock.tsx` (új), `components/FilterSheet.tsx`
+(helyőrző csere, a `placeholderBar` stílus törölve), `constants/theme.ts`
+(`duration.shimmer`)
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan.
+
+Metro-oldal: ideiglenesen kitettem az `app/index.tsx` füstteszt képernyőre
+három blokkot (különböző szélesség, magasság, sarok és felület), majd
+lefuttattam az `npx expo export`-ot iOS-re és Androidra. **Mindkét** Hermes
+bundle tartalmazza a `skeletonSweep` gradienst és a rá hivatkozó
+`url(#skeletonSweep)` kitöltést, a `stopOpacity` mezőket, a két felületszínt
+(`#0F1F3D`, `#162440`) és a fénysáv `#E8F4FF` alapszínét. Az ideiglenes
+kitételt visszavontam.
+
+**Nyitva maradt:** Eszközön még nem futott – a shimmer sebessége és a 6%-os
+csúcsfedettség csak valós kijelzőn ítélhető meg, olcsó Android panelen a sáv
+lehet, hogy alig látszik. Nincs „reduce motion" kezelés: a rendszer szintű
+mozgáscsökkentés mellett is fut a sáv (`AccessibilityInfo.isReduceMotionEnabled`
+bekötése egy későbbi akadálymentesítési kör feladata). Minden példány ugyanazt
+a `skeletonSweep` gradiens-azonosítót használja; mivel a gradiens mindenhol
+azonos, ütközés nem okoz vizuális eltérést, de ha valaha variánsonként eltérő
+gradiens kell, az azonosítót példányosítani kell. A `SkeletonBlock` egyelőre
+csak a `FilterSheet`-ben él; a képernyők betöltési állapotai az S6-ban kapják
+meg.
+
+**Commit:** `feat: betöltési helyőrző komponens`
+
+---
 
 ## 2026-09-02 – Badge komponens
 
@@ -1489,3 +1545,24 @@ kívül nem értelmezett mező, ezért nem igényel `Platform` elágazást.
 betűméreténél elvágná a feliratot. Vagy hagyni az alapértelmezést, és elfogadni
 az 1–3pt-os platformeltérést – egy fejlécsorban ez látható elcsúszás.
 **Visszavonható?** Igen, két stílusmező.
+
+## D-037 – A skeleton gradiens sweep, és ehhez új `duration.shimmer` token jött
+**Dátum:** 2026-09-02
+**Döntés:** A `SkeletonBlock` egy `react-native-svg` gradienssávot futtat át a
+blokkon 1200ms-os, lineáris, végtelen ciklusban. Ehhez új token került a
+`constants/theme.ts`-be: `duration.shimmer = 1200`.
+**Miért:** A betöltési állapotra nincs mockup, ezért a három szóba jöhető
+irányt (gradiens sweep / opacitás pulzálás / statikus blokk) felvetettem, és a
+gradiens sweep lett a választott – ez felel meg a `CLAUDE.md` „shimmer, nem
+spinner" előírásának. A meglévő `duration` értékek (200/300/400) egy végtelen
+ciklusban kapkodónak hatnának, a lista-stagger 60ms pedig nem erre való, ezért
+a periódus külön tokent kapott ahelyett, hogy a komponensben állna egy szám.
+A gradiens SVG-ből jön, mert egy `View` fénysávnak kemény éle lenne; a
+`react-native-svg` már a `FilterSheet` miatt is dependency, új csomag nem
+kellett.
+**Alternatíva:** Opacitás pulzálás (2× `duration.slow`, új token nélkül,
+viszont inkább „lélegzés", mint shimmer), vagy statikus helyőrző (nulla
+animációs költség, de hosszabb töltésnél megfagyott appnak látszik).
+Elvetettük az `expo-linear-gradient` felvételét is: ugyanazt tudná, de egy
+plusz csomag árán.
+**Visszavonható?** Igen, a komponens egyetlen fájl.

@@ -184,6 +184,8 @@ export const duration = {
   slow: 400,
   /** Lista-belépés stagger elemenként */
   stagger: 60,
+  /** A `SkeletonBlock` fénysávjának egy körbefutása (D-037) */
+  shimmer: 1200,
 } as const;
 
 /** Minimális érintési célpont – ennél kisebb vizuális elemhez hitSlop kell. */
