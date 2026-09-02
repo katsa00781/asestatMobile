@@ -79,7 +79,9 @@
 - [x] **Tabella** (`app/(tabs)/standings.tsx`) – bajnoki tabella saját sorkomponenssel. Mockup: `Tabella`
 - [x] **Elemzés – hub** (`app/(tabs)/analysis/index.tsx`) – a mentett AI riportok listája egy helyen (meccs / csapat / játékos), fajta szerinti szűrő-chipekkel
 - [x] **Riportolvasó** (`app/(tabs)/analysis/[id].tsx`) – egy riport teljes szövege, szekciócímekkel és megállapítás-listával
-- [ ] **Elemzés – számított elemzések** – a P12 „Számított elemzések" szekciója: Szituációk (`@core/situational-analysis`: hazai/vendég, szoros/kiütéses, félidei vezetés, negyedbontás, four factors), Ellenfél scouting (`@core/pregame-scouting`), Szerepkör-elemzés (`@core/team-analysis`)
+- [x] **Elemzés – Szituációk** (`app/(tabs)/analysis/situational.tsx`) – a P12 „Számított elemzések" szekciójának első sora és a P13 képernyő: hazai/vendég összehasonlítás, szoros/kiütéses és félidei helyzetek, negyedbontás, four factors (`@core/situational-analysis`)
+- [ ] **Elemzés – Ellenfél scouting** – a következő ellenfél erősségei és gyengéi (`@core/pregame-scouting`)
+- [ ] **Elemzés – Szerepkör-elemzés** – ki mit tesz hozzá a csapatjátékhoz (`@core/team-analysis`)
 - [ ] Clutch bontás a **Meccs részletein** (`@core/kosarstat-clutch-parse`) – szezonszintű clutch nézet nincs (D-069)
 - [ ] Tab layout véglegesítése: 5 tab ikonokkal, aktív állapot cián glow-val, safe area alul
 
@@ -132,6 +134,95 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Szituációk képernyő (számított elemzések, 1/3)
+
+**Mit:** Elkészült a P12 „Számított elemzések" szekciójának első sora és a
+mögötte álló P13 képernyő. Az Elemzés hub tetején most a szekciócímke és egy
+navigációs sor áll (célkereszt ikon, cián), ami a Szituációk képernyőt nyitja.
+A képernyő szegmentált kontrollal három nézetet vált.
+
+*Adat.* Új hook: `useSituationalData`. A számítást a
+`@core/situational-analysis` `buildSituationalData`-ja végzi, ugyanazokkal a
+bemenetekkel, mint a webes `SituationalAnalysis`. Két eltérés, mindkettő
+mobil-indok: a negyed- és metrikatábla a csapat `kosarstat_game_id`-jaira
+szűr, nem a szezonra (D-070), és a P13 nyolc metrikasorához a szezon
+`player_game_stats` táblája adja a dobás-, lepattanó-, assziszt- és
+labdaadatot (D-071). A lekérdezés két körben fut: előbb a `games`, mert a
+kosarstat-azonosítók csak abból derülnek ki.
+
+*Megjelenítési modell.* Új modul: `lib/situational-view.ts` – tiszta, hálózat
+nélküli fájl, ami a kész sorokat (formázott értékekkel), a lábjegyzeteket és
+a három összegző szöveget állítja elő. A képernyő csak elrendez.
+
+*Szegmensek.* **Hazai / vendég**: összehasonlító fejléc (meccsszám + mérleg,
+cián és narancs sávval) és nyolc szembeállított metrikasor a mockup szerint.
+**Helyzetek**: szoros, kiütéses, félidei vezetés/hátrány, N1 nyert/vesztett
+mérlege arányjelző sávval, alatta a four factors + támadó rating.
+**Negyedek**: a négy negyed szerzett/kapott/különbség/mérleg bontása
+`StatMatrix`-ben. Mindhárom nézet alján lábjegyzet mondja meg, hány meccs
+adatán áll, és egy `Megállapítás` kártya foglalja össze a látottakat.
+
+*Komponensek.* Öt új: `SegmentedControl` (a P5/P7/P13 prompt sávja, eddig nem
+volt megépítve), `SplitHeader`, `SplitMetricRow`, `SituationPanel`,
+`InsightCard`, plusz a hub navigációs sorához `NavRow`.
+
+**Eltérések, hiányok:**
+
+- A P13 **két** szegmenst ír elő, itt **három** van (D-072) – különben a
+  `@core` modul fele (helyzetek, negyedek, four factors) kihasználatlan
+  maradna, a feladatlista sora viszont kéri őket.
+- A helyzetek feliratai **nem** a `@core` `label` mezőjéből jönnek: azok `≤` és
+  `≥` jelet használnak, ami egyik csomagolt betűkészletben sincs meg (D-075).
+- A jobb érték „glow"-ja réteg (accent keret + kitöltés), nem elmosott árnyék
+  (D-005, D-074).
+- A `Megállapítás` szövege **sablonból** áll össze a kiszámolt számokból, nem
+  AI-ból (D-076) – a mobil app továbbra sem generál tartalmat.
+- A hub szekciójában egyelőre **egy** sor áll: a scouting és a szerepkör-
+  elemzés a saját feladatában kerül be, halott gomb nélkül (D-073).
+- Negyedadat nélküli szezonban (pl. 2024/2025) a félidei és N1-es sorok, a
+  negyedbontás és a four factors kimarad; a hiányt a lábjegyzet mondja ki
+  (D-047 mintája).
+
+**Fájlok:** `app/(tabs)/analysis/situational.tsx` (új),
+`app/(tabs)/analysis/index.tsx` (szekció + navigációs sor),
+`hooks/useSituationalData.ts` (új), `lib/situational-view.ts` (új),
+`types/situational.ts` (új), `components/{SegmentedControl,SplitHeader,
+SplitMetricRow,SituationPanel,InsightCard,NavRow}.tsx` (mind új)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan. A teljes lánc
+(lekérdezés → `buildSituationalData` → `buildSituationalView`) élesben, a
+kliens anon kulcsával lefuttatva **mind az 5 szezonra × 2 csapatra**: sehol
+`NaN` vagy `Infinity`, és a szezonspecifikus stat-tábla mindenhol válaszol.
+2025/2026, ASE: 58 meccs, ebből 25-nek van kosarstat-azonosítója; hazai 24GY-5V
+és vendég 16GY-13V; a nyolc metrikasor 95.2/84.4 · 82.1/79.4 · +13.2/+5.0 ·
+52.4/46.6 · 38.1/35.0 · 33.0/36.1 · 22.1/18.4 · 10.7/11.9. A pontátlag a
+`games` táblából és a `player_game_stats` összegzéséből **azonos** (95.2 /
+84.4), tehát a két forrás konzisztens. A `.in()` szűrés méréssel is indokolt:
+szezonra szűrve 1000+ negyedstat sor (levágva a PostgREST limitnél) és 470
+metrikasor jön, a csapat 25 azonosítójára 200 és 50. A hiányzó glifák a
+betűfájlok `cmap` táblájából ellenőrizve: a `≤` és `≥` egyik csomagolt
+betűkészletben sincs meg (ezért a szöveges feliratok), a `−` `–` `·` `%`
+viszont mindegyikben. `npx expo export` iOS-re és Androidra lefut; mindkét
+Hermes bundle tartalmazza a képernyő feliratait („Szituációk", „Hazai /
+vendég", „Számított elemzések", „Megállapítás", „Four factors", „Támadó
+rating", „Kiütéses meccs (15p-től)", „Nincs elemezhető meccs") és a két
+kosarstat táblanevet.
+
+**Nyitva maradt:** **Eszközön még nem futott.** Négy dolgot valós kijelzőn kell
+megítélni: (1) a 88pt-os értékdobozban a 22pt-os mono szám a leghosszabb
+alakkal (`+13.2`) elfér-e ékezet nélkül is; (2) a szembeállított sávok
+olvashatósága, amikor a két oldal majdnem egyforma (kapott pont: 1.00 vs 0.97);
+(3) a 36pt-os szegmentált kontroll három szegmenssel Androidon – a „Hazai /
+vendég" felirat a legszélesebb; (4) a `StatMatrix` négy negyedsora vízszintes
+görgetés nélkül elfér-e 390pt alatt. Érvényben marad a korábbi lelet: a
+csomagolt betűkészletekből hiányzik az `ő`/`ű` glifa – ez itt a „Félidőben
+vezetett", a „Kiütéses meccs" és a „legerősebb negyed" szöveget érinti.
+A P12 lila aktív tab-állapota továbbra is nyitva van.
+
+**Commit:** `feat: Szituációk képernyő`
+
+---
 
 ## 2026-09-02 – Elemzés hub és riportolvasó
 
@@ -2688,3 +2779,112 @@ használja (`components/GameDetails.tsx`).
 előszámolt clutch tábla a szerveren – sémamódosítás, ami a mobil scope-on kívül
 van.
 **Visszavonható?** Igen, a modul a `core/`-ban ott van, csak nincs hívója.
+
+## D-070 – A negyed- és metrikatábla a csapat meccseire szűr, nem a szezonra
+**Dátum:** 2026-09-02
+**Döntés:** A `kosarstat_game_quarter_stats` és a `kosarstat_game_team_metrics`
+lekérdezése a csapat `kosarstat_game_id`-jainak listájára megy
+(`.in('kosarstat_game_id', ids)`), nem `season_id`-ra, ahogy a webes
+`SituationalAnalysis` teszi. Emiatt a lekérdezés két körben fut: előbb a
+`games`, mert az azonosítók csak abból derülnek ki.
+**Miért:** A két tábla a **teljes ligát** tárolja. A 2025/2026-os szezonra
+szűrve a negyedstat 1000 sornál levágódik a PostgREST limitnél (tehát a webes
+alak csendben hiányos adatból számol), és 470 metrikasor jön. A csapat 25
+azonosítójára ugyanez 200 és 50 sor – mobilon ez a különbség a hálózaton is
+látszik, és a `CLAUDE.md` „minden lekérdezés szűrt" szabályát is ez tartja be.
+**Alternatíva:** (a) a webes alak `fetchAllRows`-zal lapozva – helyes lenne, de
+a liga összes csapatának adatát letöltené egy csapat elemzéséhez; (b) szezonra
+szűrés lapozás nélkül – ez a webprojekt mai, hiányos viselkedése.
+**Következmény:** Az extra kör miatt a képernyő két hálózati menetben tölt.
+**Visszavonható?** Igen, a két fetch függvény szűrője cserélendő.
+
+## D-071 – A nyolc metrikasor dobásadata a szezon `player_game_stats` táblájából jön
+**Dátum:** 2026-09-02
+**Döntés:** A P13 nyolc metrikasorából a mezőny%, hármas%, lepattanó, assziszt
+és eladott labda a szezonspecifikus `player_game_stats` táblából áll elő, a
+játékossorokat meccsenként összeadva (`getSeasonStatsTable`, `games!inner`
+szűréssel). A pontok a `games` sorokból jönnek.
+**Miért:** A `@core/situational-analysis` hazai/vendég bontásban csak a támadó
+ratinget és az eFG%-ot adja – a mockup nyolc sora ebből nem jön ki. A
+`player_game_stats` viszont minden meccshez megvan (2025/2026, ASE: 581 sor, 58
+meccs, egy PostgREST lapon belül), és a belőle számolt pontátlag **azonos** a
+`games` tábláéval (95.2 / 84.4), tehát a két forrás konzisztens.
+**Alternatíva:** (a) hat sor, csak a `@core` adataiból (nincs extra lekérdezés,
+de a mockup fele elveszne); (b) a hiányzó metrikák felvétele a `@core`-ba –
+sémán kívüli, és a webprojektben kellene megcsinálni.
+**Következmény:** A csapatösszegzés a mobil hookban él, nem a `@core`-ban. Ha a
+webprojekt később ad rá modult, ide kell visszavezetni.
+**Visszavonható?** Igen, a `fetchSplitTotals` és a `buildMetrics` cserélendő.
+
+## D-072 – Három szegmens a mockup kettője helyett
+**Dátum:** 2026-09-02
+**Döntés:** A Szituációk képernyő szegmentált kontrollja három nézetet vált
+(Hazai / vendég · Helyzetek · Negyedek), a P13 kettője (Hazai/vendég ·
+Nyert/vesztett) helyett. Engedéllyel.
+**Miért:** A feladatlista sora a szoros/kiütéses meccseket, a félidei vezetést,
+a negyedbontást és a four factorst is kéri, és a `@core/situational-analysis`
+mindezt kiadja – a P13 két szegmensébe viszont egyik sem fér bele. A
+„nyert/vesztett" bontás ezekhez képest kevés újat mond: a mérleget az
+összehasonlító fejléc már mutatja. A prompt elrendezése (szegmentált kontroll,
+összehasonlító fejléc, metrikasorok, összegző kártya) változatlan marad.
+**Alternatíva:** (a) pontosan a mockup két szegmense, a modul fele kihasználva;
+(b) két szegmens és alattuk mindig látszó blokkok – a képernyő ettől nagyon
+hosszúra nyúlt volna.
+**Visszavonható?** Igen, a `SEGMENTS` tömb és három render-függvény.
+
+## D-073 – A hub „Számított elemzések" szekciója csak a kész sort viszi
+**Dátum:** 2026-09-02
+**Döntés:** Az Elemzés hubon a szekció megjelent, de egyetlen navigációs sorral
+(Szituációk). Az ellenfél scouting és a szerepkör-elemzés sora akkor kerül be,
+amikor a képernyője elkészül.
+**Miért:** A D-066 elve érvényben marad: halott vagy „hamarosan" feliratú gomb
+félkész app benyomását adja. Így viszont a szekció már ott van, és minden
+feladat egy sorral bővíti.
+**Alternatíva:** Mind a három sor kirakása, kettő letiltva.
+**Visszavonható?** Igen, a hub képernyőn egy blokk.
+
+## D-074 – A jobb érték glow-ja keret + kitöltés, fix geometriával
+**Dátum:** 2026-09-02
+**Döntés:** A metrikasorban a jobb teljesítményt adó oldal értéke accent
+kitöltést és accent keretet kap (`glow.cyan` / `glow.orange`), nem elmosott
+árnyékot. A keretdoboz **mindkét** oldalon ott van, átlátszóan, ha nem az az
+oldal a jobb.
+**Miért:** Színes elmosott glow-t RN nem tud megbízhatóan mindkét platformon
+(D-005). A doboz mindkét oldali kirajzolása azért kell, mert enélkül a
+kiemelt sor számai 1-1pt-ot elcsúsznának a többi sorhoz képest – nyolc egymás
+alatti szám esetén ez jól látszana.
+**Alternatíva:** (a) a gyengébb érték halványítása kiemelés helyett – a mockup
+mindkét értéket accent színben kéri; (b) Skia `BlurMask` – egy metrikasorért
+nem éri meg behozni a Skiát.
+**Visszavonható?** Igen, a `SplitMetricRow` `Value` komponense.
+
+## D-075 – A helyzetfeliratok szövegesek, mert a `≤` és `≥` glifa hiányzik
+**Dátum:** 2026-09-02
+**Döntés:** A játékhelyzetek feliratai nem a `@core` `label` mezőjéből jönnek,
+hanem a `lib/situational-view.ts` saját táblájából: „Szoros meccs (max 5p)" és
+„Kiütéses meccs (15p-től)" a `Szoros (≤5p)` / `Gálameccs (≥15p)` helyett.
+**Miért:** A `≤` és a `≥` egyik csomagolt betűkészletben sincs meg (a
+betűfájlok `cmap` tábláiból ellenőrizve) – tofu négyzetként jelennének meg,
+ugyanaz a lelet, mint D-064-nél. A `@core` másolatot javítani tilos, a
+webprojekten pedig nem indokolt változtatni egy mobil betűkészlet miatt.
+**Alternatíva:** (a) a hiányzó glifát tartalmazó betűvágat becsomagolása – a
+három családot nem cseréljük egy jelért; (b) a `@core` felirat átírása a
+webprojektben – a weben a glifa megvan, ott nincs hiba.
+**Visszavonható?** Igen, a `SITUATION_LABELS` tábla.
+
+## D-076 – A „Megállapítás" szöveg sablonból áll össze, nem AI-ból
+**Dátum:** 2026-09-02
+**Döntés:** A P13 összegző kártyájának szövegét a `lib/situational-view.ts`
+állítja elő sablonból, a már kiszámolt számokból (pl. melyik a fő forrása a
+hazai/vendég különbségnek, melyik a legjobb és leggyengébb helyzet, melyik a
+legerősebb és leggyengébb negyed). A számok darabokban (`InsightFragment`)
+érkeznek, hogy monospace-szel és cián színnel emelkedjenek ki.
+**Miért:** A mockup megállapítás-mondatot kér, de a mobil app **nem generál AI
+tartalmat** (`CLAUDE.md`) – riportot csak olvas. A sablonos szöveg
+determinisztikus, ellenőrizhető, és nem kell hozzá se kulcs, se hálózat.
+**Alternatíva:** (a) a kártya elhagyása – a mockup egy elemével kevesebb; (b)
+AI hívás – a mobil scope-on kívül van.
+**Következmény:** A szöveg csak azt mondja ki, amit a számokból le lehet
+vezetni; nyelvi finomságokat (pl. a negyedek „az N3" névelője) kézzel kell
+kezelni.
+**Visszavonható?** Igen, három függvény a view modulban.

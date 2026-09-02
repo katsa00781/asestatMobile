@@ -5,20 +5,21 @@
  * Fejléc, nagy cím, majd az „AI riportok" szekció: fajta szerinti szűrő-chipek
  * és a riportkártyák, a legfrissebb elöl. Egy kártya a riportolvasót nyitja.
  *
- * A P12 „Számított elemzések" szekciója (szituációk, scouting, szerepkör)
- * **még nem** része a képernyőnek – külön feladatban készül, hogy ne álljon
- * itt olyan navigációs sor, ami sehová nem vezet (D-066).
+ * A P12 „Számított elemzések" szekciójából csak az elkészült képernyők sora
+ * áll itt: most a Szituációk. Az ellenfél scouting és a szerepkör-elemzés a
+ * saját feladatában kerül be – halott navigációs sor nincs (D-066, D-073).
  */
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { FileSearch, Sparkles } from 'lucide-react-native';
+import { Crosshair, FileSearch, Sparkles } from 'lucide-react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { ChipRow } from '@/components/ChipRow';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorPanel } from '@/components/ErrorPanel';
+import { NavRow } from '@/components/NavRow';
 import { ReportListCard } from '@/components/ReportListCard';
 import { SectionLabel } from '@/components/SectionLabel';
 import { SkeletonBlock } from '@/components/SkeletonBlock';
@@ -59,6 +60,16 @@ export default function AnalysisScreen() {
         ) : null}
       </View>
 
+      <SectionLabel label="Számított elemzések" style={styles.sectionLabel} />
+      <NavRow
+        icon={Crosshair}
+        title="Szituációk"
+        description="Hazai/vendég, helyzetek, negyedbontás"
+        tone="cyan"
+        onPress={() => router.push('/analysis/situational')}
+        style={styles.navRow}
+      />
+
       {error ? <ErrorPanel message={error} onRetry={reload} /> : null}
 
       {!error && loading ? <ReportsSkeleton /> : null}
@@ -66,7 +77,7 @@ export default function AnalysisScreen() {
       {ready && hasReports ? (
         <>
           <View style={styles.section}>
-            <SectionLabel label="AI riportok" style={styles.sectionLabel} />
+            <SectionLabel label="AI riportok" style={styles.reportsLabel} />
             <Sparkles size={16} color={colors.accent.ai} strokeWidth={1.8} />
           </View>
 
@@ -157,6 +168,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionLabel: {
+    marginHorizontal: spacing[4],
+  },
+  navRow: {
+    marginHorizontal: spacing[4],
+    marginBottom: spacing[5],
+  },
+  reportsLabel: {
     // A rés a soron van, hogy a szikra ikon a felirattal egy vonalban álljon.
     marginBottom: 0,
   },
