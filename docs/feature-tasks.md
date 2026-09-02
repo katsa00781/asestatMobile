@@ -73,7 +73,7 @@
 
 - [x] **Ma** (`app/(tabs)/index.tsx`) – következő/legutóbbi meccs kártya, csapat KPI-ok StatTile-okban, gyors belépési pontok. Mockup: `Ma Screen`
 - [x] **Meccsek – lista** (`app/(tabs)/games/index.tsx`) – lejátszott meccsek + közelgő fixtures, StackedRow-val
-- [ ] **Meccs részletei** (`app/(tabs)/games/[id].tsx`) – eredmény, negyedek, box score StatMatrix-ben, mentett pregame/postgame riport `GlowCard accent="ai"`-ban
+- [x] **Meccs részletei** (`app/(tabs)/games/[id].tsx`) – eredmény, negyedek, box score StatMatrix-ben, mentett pregame/postgame riport `GlowCard accent="ai"`-ban
 - [ ] **Játékosok – lista** (`app/(tabs)/players/index.tsx`) – szezon-aggregált lista, rendezés, névkeresés. Mockup: `Jatekosok Lista`
 - [ ] **Játékos részletei** (`app/(tabs)/players/[id].tsx`) – szezonstatisztika, meccsenkénti bontás, mentett játékos-riportok
 - [ ] **Tabella** (`app/(tabs)/standings.tsx`) – bajnoki tabella StatMatrix-ben. Mockup: `Tabella`
@@ -129,6 +129,83 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Meccs részletei képernyő
+
+**Mit:** Elkészült az S6 harmadik képernyője: a meccslistából megnyitott
+`games/[id]` helyőrző helyén most a meccs teljes képe áll – végeredmény,
+negyedenkénti bontás, box score és a mentett AI riportok.
+
+*Adat.* Új `hooks/useGameDetails.ts`. Maga a meccs sora (ellenfél, dátum,
+eredmény, forduló) **nem** külön lekérdezés: a `useGameData` szűrőpáronkénti
+cache-éből jön, amit a lista már letöltött – a részletek fejléce ezért azonnal
+kirajzolódik (D-046). Három saját lekérdezés fut, lapozás nélkül (egy meccshez
+legfeljebb néhány tucat sor tartozik): a szezonspecifikus statisztikatáblából
+(`@core/season-tables` `getSeasonStatsTable()`) a játékossorok
+`players!inner(name, number)` beágyazással, a `game_text_reports` riportjai, és
+– ha a meccsnek van `kosarstat_game_id`-ja – a `kosarstat_game_quarter_stats`
+negyedei. A `useGameData` `select`-je ezért egy oszloppal bővült
+(`kosarstat_game_id`), és a `TeamGame` egy mezővel (`kosarstatGameId`).
+
+*Képernyő.* `app/(tabs)/games/[id].tsx`: visszalépés sáv, eredménykártya, majd
+három szekció (`Negyedek`, `Box score`, `Elemzés`). A részletképernyő nem az
+`AppHeader`-t viseli – a szűrő-chip átállítása kiléptetné a felhasználót az
+éppen nézett meccs alól –, helyette az új `components/BackHeader.tsx` áll a
+tetején (D-046). Ha a meccs nincs a kiválasztott szűrőben, `EmptyState`
+magyaráz.
+
+*Komponensek.* `GameScoreCard` (a `LastGameCard` felépítése nagyobb, 40pt-os
+pontszámmal és `xl` sarokkal), `QuarterScores` és `BoxScore` (mindkettő a
+meglévő `StatMatrix`-ra épül – ez a mátrix első éles használata), valamint
+`ReportCard` (`GlowCard accent="ai"`, nyolc sorra csukva, „Teljes riport"
+gombbal – D-049). A `lib/format.ts` új `shortenPlayerName()`-je adja a mátrix
+fagyasztott oszlopát (`EDWIN Deon Javern` → `EDWIN D.`), ahogy a
+`p0-style-tile` mockup mátrixa mutatja (`Kovács P.`).
+
+**Eltérések, hiányok:**
+
+- **Mockup ehhez a képernyőhöz nincs**; a kártya a `ma-screen` „Legutóbb"
+  blokkját, a két mátrix a `p0-style-tile` „StatMatrix minta" blokkját követi.
+- A **plusz-mínusz oszlop kimarad**: az adatbázisban gyakorlatilag mindenhol
+  nulla (7402 sorból 5 nem az) – D-048.
+- A **negyedenkénti bontás ritka**: a 2025/2026-os szezon 35 meccséhez van
+  kosarstat import, a többinél a szekció magyarázó sort mutat, nem tűnik el
+  (D-047).
+- A riport **dátuma a `generated_at` UTC napja**; késő esti generálásnál ez
+  egy nappal korábbi napot írhat ki, mint a helyi idő. A riportkártyán ez
+  tájékoztató adat, ezért nem építettünk hozzá időzóna-kezelést.
+- A box score-ból **kimaradnak a 0 percet játszó sorok** (csupa nulla lenne),
+  és a mátrix a webes rövidítéseket használja (LP / GP / LS / BD / LV / SZ /
+  Ért) jelmagyarázattal, hogy a stáb a két felületen ugyanazt olvassa.
+
+**Fájlok:** `app/(tabs)/games/[id].tsx` (helyőrző helyett a képernyő),
+`hooks/useGameDetails.ts`, `components/{BackHeader,GameScoreCard,QuarterScores,BoxScore,ReportCard}.tsx`
+(mind új), `types/games.ts` (`kosarstatGameId` + 4 új típus),
+`hooks/useGameData.ts` (egy oszloppal bővült `select`), `lib/format.ts`
+(`shortenPlayerName`)
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan. A három
+lekérdezés élesben, a **kliens anon kulcsával** (REST) is lefut: box score
+beágyazott `players` sorral, negyedek `team_side` szerint, riport a
+`game_text_reports`-ból – az RLS mindhármat engedi. `npx expo export` iOS-re és
+Androidra lefut; **mindkét** Hermes bundle tartalmazza a képernyő feliratait
+(ékezetesekre UTF-16-ban is keresve): „Végeredmény", „Negyedek", „Box score",
+„Elemzés", „Teljes riport", „Összecsukás", a négy riporttípus feliratát, a
+három üres-állapot mondatot és a jelmagyarázatot.
+
+**Nyitva maradt:** **Eszközön még nem futott.** A két mátrix vízszintes
+görgetése, a 12 oszlopos box score olvashatósága és a hosszú riportszöveg
+nyitása valós kijelzőn ítélhető meg. A negyedek mátrixának fagyasztott oszlopa
+108pt: a hosszú ellenfélnevek (`Kometa-KVGY Kaposvári KK`) ott levágódnak.
+**Fontos, a képernyőn túlmutató lelet:** a becsomagolt hét betűkészlet
+egyikében sincs meg az `ő`/`Ő` és az `ű`/`Ű` glifa (a cmap Latin-1-ig tart,
+a Latin Extended-A hiányzik), tehát az „Atomerőmű SE" csapatnév és a
+„Következő meccs" / „Közelgő" feliratok legalább Androidon tofuként
+jelenhetnek meg. A subsetek cseréje külön feladat, engedéllyel.
+
+**Commit:** `feat: Meccs részletei képernyő`
+
+---
 
 ## 2026-09-02 – Meccsek lista képernyő
 
@@ -1929,3 +2006,70 @@ számoszlop színe (zöld/piros) önmagában nem hordozhatja az információt.
 `StackedRow` nem tud badge-et fogadni), vagy a forduló az alcím végén
 (levágódna).
 **Visszavonható?** Igen, néhány sor a `GameRow`-ban.
+
+## D-046 – A részletképernyő a lista cache-éből dolgozik, és nem visel `AppHeader`-t
+**Dátum:** 2026-09-02
+**Döntés:** A `games/[id]` a meccs sorát (ellenfél, dátum, eredmény, forduló)
+a `useGameData` szűrőpáronkénti cache-éből veszi, nem kérdezi le újra a
+`games` táblát. A képernyő tetején nem az `AppHeader` áll, hanem az új
+`BackHeader` (visszalépés sáv).
+**Miért:** A listáról érkezve a sor már a memóriában van, tehát a fejléc
+hálózati kör nélkül kirajzolható; a részletek három lekérdezése így csak
+azt tölti, ami tényleg hiányzik. Az `AppHeader` szűrő-chipje viszont pont
+azt az adatot cserélné ki a lába alól, amiből a képernyő él: másik szezonra
+váltva a meccs eltűnik a listából. A `BackHeader` ugyanazt a 44pt-os magasságot
+és 16pt-os bal margót tartja, tehát a fejlécsáv optikailag nem ugrik meg.
+**Alternatíva:** Külön `games` lekérdezés `id` szerint – független a szűrőtől,
+de egy plusz kör minden megnyitáskor, és a mély link amúgy sincs v1 scope-ban.
+**Következmény:** Ha a meccs nincs a kiválasztott szűrőben (pl. szűrőváltás
+után visszalépés a historyban), a képernyő `EmptyState`-et mutat. A jövőbeli
+játékos-részletek képernyő ugyanezt a mintát követheti.
+**Visszavonható?** Igen: a hookba egy `games` lekérdezés fallbackként bevehető.
+
+## D-047 – A hiányzó szekciók magyarázó sort kapnak, nem tűnnek el
+**Dátum:** 2026-09-02
+**Döntés:** A `Negyedek`, a `Box score` és az `Elemzés` szekció címkéje mindig
+kirajzolódik; ha nincs adat, egy halk (`text.muted`, DM Sans 13) mondat áll a
+helyén („Ehhez a meccshez nincs negyedenkénti bontás importálva.").
+**Miért:** A negyedenkénti bontás a kosarstat importból jön, és a
+meccseknek csak töredékéhez van meg (a 2025/2026-os szezonban 35 meccshez);
+riport is csak néhány meccshez készült. Ha ilyenkor eltűnne a szekció, a
+felhasználó nem tudná eldönteni, hogy az app nem tudja megmutatni, vagy az
+adat hiányzik – a képernyő ráadásul meccsenként más magasságúra ugrálna.
+**Alternatíva:** A szekció elrejtése (rövidebb képernyő, de néma hiány), vagy
+teljes `EmptyState` blokk (ikondobozos, 100pt magas – három hiányzó szekciónál
+ez kitöltené a képernyőt).
+**Visszavonható?** Igen, komponensenként egy feltétel.
+
+## D-048 – A box score-ból kimarad a plusz-mínusz oszlop
+**Dátum:** 2026-09-02
+**Döntés:** A `StatMatrix` 12 oszlopa: Perc, Pont, 2P, 3P, Bü, LP, GP, LS, BD,
+LV, SZ, Ért. A webes tábla `±` oszlopa nincs köztük.
+**Miért:** A `plus_minus` mező az importban gyakorlatilag üres: a 2025/2026-os
+szezon 7402 játékossorából 5-ben nem nulla, a 2024/2025-ösben 3-ban. Egy
+csupa nullát mutató oszlop mobilon fél görgetésnyi helyet visz el, és azt
+sugallná, hogy mindenki pont nullás mérleggel játszott. A `Pont` narancs és az
+`Ért` cián kiemelése viszont a webes táblát követi, hogy a két felület
+ugyanúgy olvasódjon.
+**Alternatíva:** Az oszlop megjelenítése (a webbel azonos képért), vagy
+feltételes megjelenítés, ha a meccsen bárkinél nem nulla – ez utóbbi
+meccsenként változó oszlopszámot adna, ami a mátrixban zavaró.
+**Következmény:** Ha az import egyszer kitölti a `plus_minus`-t, az oszlop egy
+sorral visszavehető a `BoxScore` `COLUMNS` listájába.
+**Visszavonható?** Igen, egy sor.
+
+## D-049 – A riport nyolc sorra csukva indul, gombbal nyílik
+**Dátum:** 2026-09-02
+**Döntés:** A `ReportCard` a `narrative`-ot `numberOfLines={8}`-cal mutatja, és
+egy 44pt-os „Teljes riport" / „Összecsukás" gomb nyitja ki. A gomb csak 360
+karakternél hosszabb szövegnél jelenik meg.
+**Miért:** A mentett riportok 3 900–6 300 karakteresek, ami mobilon 60–90 sor:
+kinyitva a képernyő aljára tett `Elemzés` szekció mindent maga alá temetne, és
+a box score-hoz visszagörgetni több képernyőnyi utat jelentene. A 360 karakteres
+küszöb a nyolc sor × ~45 karakter becslése DM Sans 13pt-on – ennél rövidebb
+szövegnél a gomb csak zavarna. A szöveg nyers bekezdésekként jelenik meg
+(a `narrative` sima szöveg, nem markdown), formázó nélkül.
+**Alternatíva:** Külön riport-képernyő (több navigáció egy olvasásért), vagy
+mindig teljes szöveg (a szekció használhatatlanul hosszú lenne).
+**Visszavonható?** Igen, egy propra kivezethető.
+

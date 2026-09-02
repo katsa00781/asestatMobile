@@ -23,6 +23,11 @@ export interface TeamGame {
   ourScore: number;
   oppScore: number;
   result: GameResult;
+  /**
+   * A kosarstat import azonosítója, ha a meccset onnan is beolvasták. Ezen
+   * keresztül köthető a negyedenkénti bontás – a meccsek nagy részénél `null`.
+   */
+  kosarstatGameId: string | null;
 }
 
 /** Még le nem játszott találkozó a bajnoki menetrendből. */
@@ -50,4 +55,46 @@ export interface TeamAggregate {
   avgConceded: number;
   /** Átlagos pontkülönbség (szerzett − kapott). */
   avgDiff: number;
+}
+
+/** Egy játékos sora a meccs box score-jában. */
+export interface PlayerGameLine {
+  playerId: string;
+  name: string;
+  number: number;
+  minutes: number;
+  points: number;
+  /** Kétpontos (közeli + középtávoli) bedobott / kísérlet. */
+  twoMade: number;
+  twoAttempted: number;
+  threeMade: number;
+  threeAttempted: number;
+  freeThrowMade: number;
+  freeThrowAttempted: number;
+  rebounds: number;
+  assists: number;
+  steals: number;
+  blocks: number;
+  turnovers: number;
+  fouls: number;
+  valuation: number;
+}
+
+/** Egy negyed pontjai mindkét csapatnál, a saját csapat szemszögéből. */
+export interface QuarterScore {
+  /** 1–4 (hosszabbítás esetén tovább). */
+  quarter: number;
+  ourPoints: number;
+  oppPoints: number;
+}
+
+export type GameReportType = 'pregame' | 'postgame' | 'combined' | 'manual';
+
+/** Mentett AI riport a `game_text_reports` táblából – az app csak olvassa. */
+export interface GameReport {
+  id: string;
+  type: GameReportType;
+  narrative: string;
+  /** ISO időbélyeg, ahogy a tábla tárolja. */
+  generatedAt: string;
 }

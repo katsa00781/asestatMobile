@@ -109,3 +109,18 @@ export function formatCountdown(iso: string): string {
   if (days === 1) return 'HOLNAP';
   return `${days} NAP`;
 }
+
+/**
+ * Játékosnév rövidítése listaoszlopba: `EDWIN Deon Javern` → `EDWIN D.`
+ *
+ * Az adatbázis vezetéknév–keresztnév sorrendben tárol, ezért az első szó marad
+ * egészben, a másodikból csak a kezdőbetű – ahogy a `p0-style-tile` mockup
+ * mátrixa is mutatja (`Kovács P.`). Egyszavas névből nem csinálunk semmit.
+ */
+export function shortenPlayerName(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length < 2) return name.trim();
+
+  const [family, given] = parts;
+  return `${family} ${given.charAt(0)}.`;
+}

@@ -114,7 +114,9 @@ async function fetchGameData(
     fetchAllRows<unknown>((from, to) =>
       supabase
         .from('games')
-        .select('id, date, round, opponent, home_away, our_score, opp_score, result')
+        .select(
+          'id, date, round, opponent, home_away, our_score, opp_score, result, kosarstat_game_id',
+        )
         .eq('season_id', seasonId)
         .eq('our_team_id', teamId)
         .order('date', { ascending: false })
@@ -213,6 +215,8 @@ function toGames(rows: unknown[]): TeamGame[] {
         ourScore: toNumber(row.our_score),
         oppScore: toNumber(row.opp_score),
         result,
+        kosarstatGameId:
+          typeof row.kosarstat_game_id === 'string' ? row.kosarstat_game_id : null,
       },
     ];
   });
