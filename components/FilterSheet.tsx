@@ -151,7 +151,10 @@ export function FilterSheet({ visible, onClose }: FilterSheetProps) {
           <GestureDetector gesture={dragGesture}>
             <View>
               <View style={styles.grabber} />
-              <View className="flex-row items-center justify-between border-b border-line px-16 pb-16">
+              {/* A pt-12 a „Kész" hitSlopjának ad helyet a soron belül (D-038);
+                  ugyanennyivel kisebb a grabber alsó margója, így a fejléc
+                  optikailag ott marad, ahol a mockupban. */}
+              <View className="flex-row items-center justify-between border-b border-line px-16 pb-16 pt-12">
                 <Text
                   className="font-condensed text-label uppercase text-muted"
                   style={{ letterSpacing: letterSpacing(fontSize.label, tracking.wider) }}
@@ -231,11 +234,17 @@ function DoneButton({ onPress }: { onPress: () => void }) {
       onPress={onPress}
       {...button.pressHandlers}
       accessibilityRole="button"
-      // A felirat vizuálisan kisebb 44pt-nál, ezért hitSlop növeli a célpontot.
-      hitSlop={{ top: 14, bottom: 14, left: 16, right: 16 }}
+      // A felirat 20pt magas, a hiányzó részt hitSlop pótolja. A slop a
+      // fejlécsor saját margóin belül marad – kívülre egyik platform sem
+      // kézbesíti az érintést (D-038).
+      hitSlop={{ top: 12, bottom: 14, left: 16, right: 16 }}
       style={{ opacity: button.pressed ? 0.6 : 1 }}
     >
-      <Text className="font-body text-md text-cyan">Kész</Text>
+      {/* Rögzített sormagasság: enélkül a célpont mérete a platform
+          alapértelmezett sorközétől függne. */}
+      <Text className="font-body text-md text-cyan" style={styles.doneLabel}>
+        Kész
+      </Text>
     </Pressable>
   );
 }
@@ -356,10 +365,13 @@ const styles = StyleSheet.create({
   grabber: {
     width: 36,
     height: 4,
-    marginBottom: 14,
+    marginBottom: 2,
     alignSelf: 'center',
     borderRadius: radius.xs,
     backgroundColor: colors.border.active,
+  },
+  doneLabel: {
+    lineHeight: 20,
   },
   list: {
     // Enélkül a lista kinőné a sheet maxHeight-ját, és a lábjegyzet kicsúszna.

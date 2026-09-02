@@ -14,7 +14,16 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { TriangleAlert } from 'lucide-react-native';
 
-import { colors, fontSize, glow, letterSpacing, radius, tracking } from '@/constants/theme';
+import {
+  colors,
+  fontSize,
+  glow,
+  letterSpacing,
+  radius,
+  spacing,
+  tapTarget,
+  tracking,
+} from '@/constants/theme';
 import { usePressed } from '@/hooks/usePressed';
 
 interface ErrorPanelProps {
@@ -74,9 +83,11 @@ function InlineRetry({ onPress }: { onPress: () => void }) {
       {...button.pressHandlers}
       accessibilityRole="button"
       accessibilityLabel="Újrapróbálás"
-      // A felirat vizuálisan kisebb 44pt-nál, ezért hitSlop növeli a célpontot.
-      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      style={{ opacity: button.pressed ? 0.6 : 1 }}
+      // A felirat kisebb 44pt-nál, és hitSlop itt nem elég: a panel szűk
+      // függőleges margóján túlnyúló rész már a szülőn kívülre esne, oda
+      // pedig egyik platform sem kézbesíti az érintést (D-038). Ezért maga
+      // a gomb 44×44, a panel margója pedig ehhez lett szűkebb.
+      style={[styles.inlineButton, { opacity: button.pressed ? 0.6 : 1 }]}
     >
       <Text
         className="font-condensed text-sm uppercase text-cyan"
@@ -100,7 +111,7 @@ const styles = StyleSheet.create({
     borderColor: glow.negative.border,
   },
   blockButton: {
-    height: 44,
+    height: tapTarget,
     marginTop: 20,
     paddingHorizontal: 24,
     alignItems: 'center',
@@ -109,12 +120,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border.subtle,
   },
+  inlineButton: {
+    minWidth: tapTarget,
+    minHeight: tapTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[2],
+  },
   inline: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    // A 44pt-os „Újra" gomb adja a panel magasságát, a margó ehhez szűkebb.
+    paddingVertical: 6,
     borderRadius: radius.sm,
     borderWidth: 1,
     backgroundColor: glow.negative.fill,

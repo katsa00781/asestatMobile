@@ -65,7 +65,7 @@
 - [x] `components/Badge.tsx` – 7 variáns (cyan / orange / ai / positive / negative / warning / neutral)
 - [x] `components/SkeletonBlock.tsx` – shimmer betöltés (Reanimated)
 - [x] `components/EmptyState.tsx` – üres állapot ikonnal és szöveggel
-- [ ] Tap target audit: minden interaktív elem ≥ 44×44pt vagy `hitSlop`-pal kiegészítve
+- [x] Tap target audit: minden interaktív elem ≥ 44×44pt vagy `hitSlop`-pal kiegészítve
 
 ---
 
@@ -129,6 +129,73 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Tap target audit
+
+**Mit:** Végigmértem az összes interaktív elemet, és három helyen a célpont a
+44pt alatt maradt. A közös ok: a `hitSlop` **csak a szülő határain belül**
+kézbesít – a kilógó rész mindkét platformon elveszik (iOS `hitTest:`, Android
+`TouchTargetHelper`), mert az ősök bejárása megáll ott, ahol a pont már
+kívül esik. Ezt eddig implicit feltételeztük, most kimondtuk (D-038), és a
+`constants/theme.ts` `tapTarget` tokenjének kommentje is figyelmeztet rá.
+
+Mérés (magasság × szélesség, effektív célpont):
+
+| Elem | Előtte | Utána |
+|---|---|---|
+| `ErrorPanel` blokk „Újrapróbálás" | 44 × 24+felirat | változatlan |
+| `ErrorPanel` inline „Újra" | ~38 (a slop kilógott) | 44 × 44 |
+| `FilterSheet` „Kész" | ~34 (a felső slop kilógott) | 46 × 66 |
+| `FilterSheet` szezon/csapat sor | 48 × teljes szélesség | változatlan |
+| `FilterSheet` scrim | teljes képernyő | változatlan |
+| `GlowCard` (nyomható) | tartalomfüggő | min. 44 |
+| `StatTile` | 96 | változatlan |
+| `StackedRow` | 68 | változatlan |
+| `login` mezők / szemgomb / gomb | 44 | változatlan |
+| `index` szűrő-chip | 32 (a slop kilógott) | 44 |
+| `index` kijelentkezés | 44 | változatlan |
+
+A három javítás:
+
+1. **`ErrorPanel` inline „Újra"** – a hitSlop helyett maga a gomb lett 44×44
+   (`minHeight` + `minWidth` + 8pt vízszintes margó), a panel függőleges
+   margója pedig 10 → 6, hogy a panel ne nőjön a kelleténél nagyobbra: így
+   ~38pt helyett 58pt magas.
+2. **`FilterSheet` „Kész"** – a fejlécsor kapott `pt-12`-t, és ugyanennyivel
+   kisebb lett a grabber alsó margója (14 → 2), így a felirat optikailag
+   ugyanott maradt, a slopnak viszont van hová nyúlnia a soron belül. A
+   „Kész" `lineHeight`-ja fix 20, hogy a célpont mérete ne a platform
+   alapértelmezett sorközétől függjön.
+3. **`GlowCard`** – nyomható alakban `minHeight: tapTarget`. Ez nem mai hiba,
+   hanem garancia a jövőbeli hívóknak: a kártya `padding`-je kívülről állítható,
+   és egy rövid tartalmú, szűk margójú kártya 44pt alá csúszhatna. A hívó
+   `style`-ja felfelé továbbra is felülírja (a `StatTile` 96pt-tal).
+
+Az ideiglenes füstteszt képernyőn a szűrő-chip sora `py-6`-ot kapott, hogy a
+chip meglévő 6pt-os slopja a soron belülre essen. A szórványos `height: 44`
+literálok (login, füstteszt képernyő) a `tapTarget` tokenre cserélve.
+
+**Fájlok:** `components/ErrorPanel.tsx`, `components/FilterSheet.tsx`,
+`components/GlowCard.tsx`, `constants/theme.ts` (tokenkomment), `app/login.tsx`,
+`app/index.tsx`
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan. `npx expo export`
+iOS-re és Androidra lefut; **mindkét** Hermes bundle tartalmazza az új
+`inlineButton` és `doneLabel` stílusokat, a `minHeight` mezőt, valamint a
+`pt-12` / `py-6` osztályokat.
+
+**Nyitva maradt:** Eszközön még nem mértem – a 44pt-os szabály betartását
+statikus layout-számításból vezettem le (fix magasságok + a szülők margói),
+nem képernyőn mérve. A `FilterSheet` fejlécének 12pt-os áthelyezését
+(grabber margó → sor padding) érdemes egymás mellett összenézni a mockuppal.
+Az egymás melletti célpontok **távolsága** nem volt része az auditnak, csak a
+méretük; a képernyők (S6) sűrűbb sorai ezt újra felvethetik. Az S6-ban
+születő új interaktív elemekre (tab bar, listasorok, riportkártyák) az audit
+nem terjed ki – azok a saját feladatuknál mérendők.
+
+**Commit:** `fix: tap target audit`
+
+---
 
 ## 2026-09-02 – Betöltési helyőrző (`SkeletonBlock`)
 
@@ -1566,3 +1633,28 @@ animációs költség, de hosszabb töltésnél megfagyott appnak látszik).
 Elvetettük az `expo-linear-gradient` felvételét is: ugyanazt tudná, de egy
 plusz csomag árán.
 **Visszavonható?** Igen, a komponens egyetlen fájl.
+
+---
+
+## D-038 – A `hitSlop` csak a szülő határain belül fog
+**Dátum:** 2026-09-02
+**Döntés:** Ahol a megnövelt érintési terület kilógna a szülő nézet határain,
+ott nem a `hitSlop`-ot növeljük, hanem vagy a szülőnek adunk margót (a
+`FilterSheet` fejléce, a füstteszt képernyő chip-sora), vagy magát a gombot
+nagyítjuk 44pt-ra (`ErrorPanel` inline „Újra"). A `constants/theme.ts`
+`tapTarget` tokenjének kommentje ezt kimondja.
+**Miért:** Az érintéskeresés mindkét platformon felülről lefelé jár be a
+nézetfát, és csak olyan gyerekbe lép be, amelynek a *saját* határain belül van
+a pont: iOS-en a `UIView.hitTest:` a bounds-on kívül `nil`-t ad (a `RCTView`
+`hitTestEdgeInsets`-e csak akkor számít, ha az ős egyáltalán eljut hozzá),
+Androidon a `TouchTargetHelper` ugyanígy dolgozik. Egy 12pt-os slop egy 10pt
+margójú panelen tehát nem 44pt-os célpontot ad, hanem továbbra is ~38pt-osat –
+és ez a fajta hiba semmilyen típusellenőrzésen és lintelésen nem bukik el,
+csak eszközön, „néha nem reagál" formában.
+**Alternatíva:** Hagyni a kilógó slopot, arra számítva, hogy a felhasználó
+úgyis a felirat közepére nyom. Ezt elvetettük: a `CLAUDE.md` 44pt-os szabálya
+így csak papíron teljesülne. A másik szóba jött irány egy közös
+`TapTarget` wrapper komponens volt, ami minden gombot 44pt-ra tölt ki – ez
+viszont a mockup sűrű sorait (48pt-os sheet sorok, 32pt-os chip) felnyomná,
+ezért maradt az esetenkénti döntés.
+**Visszavonható?** Igen, elemenként néhány stílusmező.

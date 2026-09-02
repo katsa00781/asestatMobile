@@ -13,7 +13,7 @@ import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { Pressable, View } from 'react-native';
 
-import { type AccentTone, accentColor, colors, radius } from '@/constants/theme';
+import { type AccentTone, accentColor, colors, radius, tapTarget } from '@/constants/theme';
 import { usePressed } from '@/hooks/usePressed';
 
 /** Az accent sáv szélessége a mockupban. */
@@ -119,7 +119,15 @@ function PressableCard({
       {...card.pressHandlers}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      style={[surface, card.pressed ? { backgroundColor: colors.bg.surface2 } : null, style]}
+      // Nyomható kártya sosem lehet 44pt-nál alacsonyabb, akármilyen rövid a
+      // tartalma vagy szűk a `padding`-je. A hívó `style`-ja ezt felülírhatja
+      // felfelé (a StatTile 96pt-tal teszi).
+      style={[
+        surface,
+        { minHeight: tapTarget },
+        card.pressed ? { backgroundColor: colors.bg.surface2 } : null,
+        style,
+      ]}
     >
       {children}
     </Pressable>

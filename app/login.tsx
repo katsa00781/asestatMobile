@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Eye, EyeOff } from 'lucide-react-native';
 
-import { colors, glow, letterSpacing, radius, tracking } from '@/constants/theme';
+import { colors, glow, letterSpacing, radius, tapTarget, tracking } from '@/constants/theme';
 import { usePressed } from '@/hooks/usePressed';
 import { useAuthStore } from '@/store/authStore';
 
@@ -111,8 +111,9 @@ export default function LoginScreen() {
                 position: 'absolute',
                 top: 0,
                 right: 0,
-                width: 44,
-                height: 44,
+                // A mező 44pt magas, a szemgomb ezt tölti ki teljesen.
+                width: tapTarget,
+                height: tapTarget,
                 alignItems: 'center',
                 justifyContent: 'center',
                 opacity: eyeButton.pressed ? 0.6 : 1,
@@ -142,7 +143,7 @@ export default function LoginScreen() {
           disabled={!canSubmit}
           accessibilityRole="button"
           style={{
-            height: 44,
+            height: tapTarget,
             borderRadius: radius.md,
             backgroundColor: colors.accent.cyan,
             alignItems: 'center',

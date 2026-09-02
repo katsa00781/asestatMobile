@@ -188,7 +188,11 @@ export const duration = {
   shimmer: 1200,
 } as const;
 
-/** Minimális érintési célpont – ennél kisebb vizuális elemhez hitSlop kell. */
+/**
+ * Minimális érintési célpont – ennél kisebb vizuális elemhez hitSlop kell.
+ * A hitSlop viszont csak a szülő határain belül fog: ha a megnövelt terület
+ * kilógna, a szülőnek kell margót adni, vagy a gombot kell megnövelni (D-038).
+ */
 export const tapTarget = 44;
 
 export const theme = {

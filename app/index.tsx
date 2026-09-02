@@ -19,7 +19,7 @@ import * as teamAnalysis from '@core/team-analysis';
 import * as terminology from '@core/terminology';
 
 import { FilterSheet } from '@/components/FilterSheet';
-import { colors, letterSpacing, radius, tracking } from '@/constants/theme';
+import { colors, letterSpacing, radius, tapTarget, tracking } from '@/constants/theme';
 import { useFilterData } from '@/hooks/useFilterData';
 import { usePressed } from '@/hooks/usePressed';
 import { useAuthStore } from '@/store/authStore';
@@ -76,7 +76,8 @@ export default function SmokeTestScreen() {
           paddingHorizontal: 16,
         }}
       >
-        <View className="flex-row items-center justify-between">
+        {/* A py-6 a chip hitSlopjának ad helyet a soron belül (D-038). */}
+        <View className="flex-row items-center justify-between py-6">
           <Text className="font-condensed text-h2 text-primary">ASE STATS</Text>
           <FilterChip onPress={() => setFilterOpen(true)} />
         </View>
@@ -91,7 +92,7 @@ export default function SmokeTestScreen() {
             {...signOutButton.pressHandlers}
             accessibilityRole="button"
             style={{
-              height: 44,
+              height: tapTarget,
               paddingHorizontal: 16,
               justifyContent: 'center',
               borderRadius: radius.md,
@@ -158,7 +159,8 @@ function FilterChip({ onPress }: { onPress: () => void }) {
       {...chip.pressHandlers}
       accessibilityRole="button"
       accessibilityLabel="Szűrő megnyitása"
-      // A chip 32pt magas, a hiányzó 12pt-ot hitSlop pótolja.
+      // A chip 32pt magas, a hiányzó 12pt-ot hitSlop pótolja – a fejlécsor
+      // 6pt-os függőleges margóján belül.
       hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
       style={{
         flexDirection: 'row',
