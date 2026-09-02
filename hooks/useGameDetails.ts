@@ -10,6 +10,8 @@
  * A három részlet-lekérdezés lapozás nélkül fut: egy meccshez legfeljebb néhány
  * tucat sor tartozik, a PostgREST 1000-es limitje elérhetetlen.
  */
+import { parseGameClutch } from '@core/kosarstat-clutch-parse';
+import type { KosarstatGameClutch } from '@core/kosarstat-clutch-parse';
 import { getSeasonStatsTable } from '@core/season-tables';
 
 import { useCachedQuery } from '@/hooks/useCachedQuery';
@@ -30,6 +32,8 @@ interface GameDetailsPayload {
   boxScore: PlayerGameLine[];
   quarters: QuarterScore[];
   reports: GameReport[];
+  /** A hajrá-bontás a kosarstat nyers tábláiból, vagy `null`, ha nincs. */
+  clutch: KosarstatGameClutch | null;
 }
 
 interface GameDetailsResult extends GameDetailsPayload {
@@ -40,17 +44,23 @@ interface GameDetailsResult extends GameDetailsPayload {
   reload: () => void;
 }
 
-const EMPTY_PAYLOAD: GameDetailsPayload = { boxScore: [], quarters: [], reports: [] };
+const EMPTY_PAYLOAD: GameDetailsPayload = {
+  boxScore: [],
+  quarters: [],
+  reports: [],
+  clutch: null,
+};
 
 const cache = createQueryCache<GameDetailsPayload>();
 
 export function useGameDetails(gameId: string): GameDetailsResult {
   const { games, loading: gamesLoading, error: gamesError, reload: reloadGames } = useGameData();
-  const { selectedSeason } = useFilterData();
+  const { selectedSeason, selectedTeam } = useFilterData();
 
   const game = games.find((row) => row.id === gameId) ?? null;
   const seasonName = selectedSeason?.name ?? null;
   const seasonId = selectedSeason?.id ?? null;
+  const teamName = selectedTeam?.name ?? null;
 
   const { data, loading, error, reload } = useCachedQuery({
     cache,
@@ -60,7 +70,7 @@ export function useGameDetails(gameId: string): GameDetailsResult {
     // Csak `key !== null` esetén hívódik meg; a guard a típusszűkítésért van.
     fetcher: () =>
       game && seasonName && seasonId
-        ? fetchDetails(game, seasonName, seasonId)
+        ? fetchDetails(game, seasonName, seasonId, teamName)
         : Promise.resolve(EMPTY_PAYLOAD),
     empty: EMPTY_PAYLOAD,
     errorLabel: 'A meccs részleteinek betöltése sikertelen',
@@ -83,10 +93,11 @@ async function fetchDetails(
   game: TeamGame,
   seasonName: string,
   seasonId: string,
+  teamName: string | null,
 ): Promise<GameDetailsPayload> {
   const statsTable = getSeasonStatsTable(seasonName);
 
-  const [statsResult, reportsResult, quarterRows] = await Promise.all([
+  const [statsResult, reportsResult, quarterRows, clutch] = await Promise.all([
     supabase
       .from(statsTable)
       .select(
@@ -103,6 +114,7 @@ async function fetchDetails(
       .eq('game_id', game.id)
       .order('generated_at', { ascending: false }),
     fetchQuarters(game, seasonId),
+    fetchClutch(game, seasonId, teamName),
   ]);
 
   if (statsResult.error) throw new Error(statsResult.error.message);
@@ -112,7 +124,65 @@ async function fetchDetails(
     boxScore: toBoxScore(statsResult.data),
     quarters: quarterRows,
     reports: toReports(reportsResult.data),
+    clutch,
   };
+}
+
+/**
+ * A hajrá-bontás a kosarstat `game_clutch` oldalának **nyers HTML-tábláiból**
+ * áll össze, két lekérdezéssel: előbb a nyers oldal(ak) sora, majd a hozzájuk
+ * tartozó táblák. A meccsek nagy részéhez nincs ilyen oldal – ilyenkor `null`.
+ * Egy meccshez maximum néhány oldal és ~10 tábla tartozik, lapozás nélkül.
+ */
+async function fetchClutch(
+  game: TeamGame,
+  seasonId: string,
+  teamName: string | null,
+): Promise<KosarstatGameClutch | null> {
+  if (!game.kosarstatGameId) return null;
+
+  const { data: rawRows, error: rawError } = await supabase
+    .from('kosarstat_game_pages_raw')
+    .select('id, home_team_name, away_team_name')
+    .eq('kosarstat_game_id', game.kosarstatGameId)
+    .eq('season_id', seasonId)
+    .eq('page_type', 'game_clutch')
+    .order('imported_at', { ascending: false })
+    .limit(3);
+
+  if (rawError) throw new Error(rawError.message);
+
+  const raws = toRawRows(rawRows);
+  if (raws.length === 0) return null;
+
+  const { data: tableRows, error: tablesError } = await supabase
+    .from('kosarstat_game_page_tables')
+    .select('page_raw_id, table_index, headers, rows, source_table_dom_id')
+    .in(
+      'page_raw_id',
+      raws.map((raw) => raw.id),
+    )
+    .order('table_index', { ascending: true });
+
+  if (tablesError) throw new Error(tablesError.message);
+
+  const tablesByRaw = groupTablesByRaw(tableRows);
+
+  // A legfrissebb import az első; az első értelmezhető oldal nyer.
+  for (const raw of raws) {
+    const tables = tablesByRaw.get(raw.id);
+    if (!tables || tables.length === 0) continue;
+
+    const parsed = parseGameClutch(
+      tables,
+      { homeTeamName: raw.homeTeamName, awayTeamName: raw.awayTeamName },
+      game.homeAway,
+      teamName ?? undefined,
+    );
+    if (parsed) return parsed;
+  }
+
+  return null;
 }
 
 /**
@@ -137,6 +207,56 @@ async function fetchQuarters(game: TeamGame, seasonId: string): Promise<QuarterS
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+interface ClutchRawRow {
+  id: string;
+  homeTeamName: string | null;
+  awayTeamName: string | null;
+}
+
+function toRawRows(rows: unknown): ClutchRawRow[] {
+  if (!Array.isArray(rows)) return [];
+
+  return rows.flatMap((row: unknown) => {
+    if (!isRecord(row) || typeof row.id !== 'string') return [];
+    return [
+      {
+        id: row.id,
+        homeTeamName: typeof row.home_team_name === 'string' ? row.home_team_name : null,
+        awayTeamName: typeof row.away_team_name === 'string' ? row.away_team_name : null,
+      },
+    ];
+  });
+}
+
+/** A `@core/parseGameClutch` bemeneti alakja: táblák `page_raw_id` szerint csoportosítva. */
+interface ClutchTable {
+  headers: string[];
+  rows: unknown[][];
+  sourceTableDomId: string | null;
+}
+
+function groupTablesByRaw(rows: unknown): Map<string, ClutchTable[]> {
+  const grouped = new Map<string, ClutchTable[]>();
+  if (!Array.isArray(rows)) return grouped;
+
+  rows.forEach((row: unknown) => {
+    if (!isRecord(row) || typeof row.page_raw_id !== 'string') return;
+
+    const table: ClutchTable = {
+      headers: Array.isArray(row.headers) ? row.headers.map((cell) => String(cell ?? '').trim()) : [],
+      rows: Array.isArray(row.rows) ? row.rows.filter((cells): cells is unknown[] => Array.isArray(cells)) : [],
+      sourceTableDomId:
+        typeof row.source_table_dom_id === 'string' ? row.source_table_dom_id : null,
+    };
+
+    const bucket = grouped.get(row.page_raw_id);
+    if (bucket) bucket.push(table);
+    else grouped.set(row.page_raw_id, [table]);
+  });
+
+  return grouped;
 }
 
 function toNumber(value: unknown): number {

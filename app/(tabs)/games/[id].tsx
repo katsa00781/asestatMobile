@@ -13,6 +13,7 @@ import { CalendarX } from 'lucide-react-native';
 
 import { BackHeader } from '@/components/BackHeader';
 import { BoxScore } from '@/components/BoxScore';
+import { ClutchPanel } from '@/components/ClutchPanel';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorPanel } from '@/components/ErrorPanel';
 import { GameScoreCard } from '@/components/GameScoreCard';
@@ -30,7 +31,9 @@ export default function GameDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { selectedTeam } = useFilterData();
-  const { game, boxScore, quarters, reports, loading, error, reload } = useGameDetails(id ?? '');
+  const { game, boxScore, quarters, reports, clutch, loading, error, reload } = useGameDetails(
+    id ?? '',
+  );
 
   const ready = !error && !loading;
   const ourName = selectedTeam?.shortName ?? '';
@@ -56,6 +59,9 @@ export default function GameDetailsScreen() {
 
           <SectionLabel label="Box score" style={styles.section} />
           <BoxScore lines={boxScore} />
+
+          <SectionLabel label="Clutch" style={styles.section} />
+          <ClutchPanel clutch={clutch} ourName={ourName} opponent={game.opponent} />
 
           <SectionLabel label="Elemzés" style={styles.section} />
           {reports.length > 0 ? (

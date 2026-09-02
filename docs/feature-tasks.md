@@ -82,7 +82,7 @@
 - [x] **Elemzés – Szituációk** (`app/(tabs)/analysis/situational.tsx`) – a P12 „Számított elemzések" szekciójának első sora és a P13 képernyő: hazai/vendég összehasonlítás, szoros/kiütéses és félidei helyzetek, negyedbontás, four factors (`@core/situational-analysis`)
 - [x] **Elemzés – Ellenfél scouting** (`app/(tabs)/analysis/scouting.tsx`) – a következő ellenfél erősségei és gyengéi (`@core/pregame-scouting`)
 - [x] **Elemzés – Szerepkör-elemzés** – ki mit tesz hozzá a csapatjátékhoz (`@core/team-analysis`)
-- [ ] Clutch bontás a **Meccs részletein** (`@core/kosarstat-clutch-parse`) – szezonszintű clutch nézet nincs (D-069)
+- [x] Clutch bontás a **Meccs részletein** (`@core/kosarstat-clutch-parse`) – szezonszintű clutch nézet nincs (D-069)
 - [ ] Tab layout véglegesítése: 5 tab ikonokkal, aktív állapot cián glow-val, safe area alul
 
 ---
@@ -134,6 +134,82 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Clutch-bontás a Meccs részletein
+
+**Mit:** Elkészült az S6 utolsó előtti sora: a Meccs részletei képernyőn a
+`Box score` és az `Elemzés` közé bekerült egy `Clutch` szekció, ami a
+`@core/kosarstat-clutch-parse` `parseGameClutch`-ának kimenetét jeleníti meg.
+Szezonszintű clutch nézet továbbra sincs (D-069).
+
+*A `@core` hibája.* A `parseGameClutch` a kosarstat clutch-tábla `CSAPAT`
+összegző sorát játékosként számolta: minden csapatösszeg **duplázódott**
+(pont, eladott labda, minta), és a `CSAPAT` sor a `topUsageClosers` élére
+került. A ráta-mutatók (ortg/drtg/net/tov%/oreb%) túlélték, mert számláló és
+nevező is duplázódott. Javítva a webprojektben
+(`asestats/lib/kosarstat-clutch-parse.ts`, külön commit ott is), majd
+`npm run sync:core` és külön `core:` commit a mobil repóban (D-088).
+
+*Adat.* A `useGameDetails` mostantól egy negyedik ágat is futtat
+(`fetchClutch`): előbb a `kosarstat_game_pages_raw` `game_clutch` oldala(i)
+`kosarstat_game_id` + `season_id` szűréssel, majd a hozzájuk tartozó
+`kosarstat_game_page_tables` sorok, végül a nyers táblák a `parseGameClutch`-
+nak. Lapozás nincs – egy meccshez néhány oldal és ~10 tábla tartozik. Ha a
+meccshez nincs `kosarstatGameId` vagy clutch-oldal, `clutch` = `null`.
+
+*Megjelenítési modell.* Új tiszta modul: `lib/clutch-view.ts` – a
+`KosarstatGameClutch`-ból formázott mutatósorokat, closers-szöveget,
+lábjegyzetet és a sablonos `Megállapítás`-t építi (D-076 mintája). Három
+állapot: `available`, `notClose` (van clutch-oldal, de <60 mp minta),
+`missing` (nincs oldal). A két utóbbi a szekció eltűnése helyett magyarázó
+sort mutat (D-047 mintája).
+
+*Nem fix 5 perc.* A kosarstat „clutch" a ±5 pontos állásnál játszott percek
+**összessége**, nem egy fix időablak: a mért ASE-meccseken 05:00 és 15:00
+között szór (a 2025.09.27-i meccsen 15:00, a CSAPAT-sor szerint 75:00 = 15×5).
+Ezért a szövegek sehol nem hivatkoznak „utolsó 5 percre", a minta hosszát
+viszont mindig kiírják (D-089). A webprojekt `export-to-md.ts`-e még „utolsó
+5 perc"-nek nevezi – ez a weben pontatlan, de a mobil scope-on kívül van.
+
+*Komponens.* Egy új: `ClutchPanel` – fejléc kártya (minta + clutch-állás
+előjeles különbséggel), `StatList` a 9 mutatóval, a legtöbbet birtoklók
+kártyája, `InsightCard`, lábjegyzet.
+
+**Fájlok:** `app/(tabs)/games/[id].tsx` (Clutch szekció),
+`hooks/useGameDetails.ts` (`fetchClutch`, `toRawRows`, `groupTablesByRaw`,
+`clutch` a payloadban), `lib/clutch-view.ts` (új), `types/clutch.ts` (új),
+`components/ClutchPanel.tsx` (új), `core/kosarstat-clutch-parse.ts` (szinkron,
+külön commit)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan. A teljes lánc
+(két lekérdezés → `parseGameClutch` → `buildClutchView`) élesben, a kliens
+anon kulcsával, **mind a 37 ASE clutch-meccsre 2025/2026-ban**: 18 `available`,
+19 `notClose`, sehol `NaN` / `Infinity` / `undefined` a nézetmodellben, és a
+`CSAPAT` sor **egyetlen closers-listába sem** szivárgott be (a fix előtt
+mind a 18-ban ott volt). A duplázás eltűnt: pl. a 2026.05.25-i meccs (ASE
+vendég) a fix előtt 8–22 / minta 25:00 / „CSAPAT (50%)", a fix után 4–11 /
+minta 05:00 / valós closerek – a 4–11 pontosan a játékossorok összege. A
+2022/2023–2024/2025 szezonokra és a kosarstat nélküli meccsekre a `missing`
+ág fut (magyarázó sor). `npx expo export` iOS-re és Androidra lefut; mindkét
+Hermes bundle tartalmazza a szekció feliratait („Clutch", „Clutch állás",
+a „…rating" mutatókat, a „…closers"/`topUsageClosers` magot).
+
+**Nyitva maradt:** **Eszközön még nem futott.** Három dolgot valós kijelzőn
+kell megítélni: (1) a fejléc kártya két oszlopa a leghosszabb alakkal
+(`15:00` és `27–15  +12`) egy sorban marad-e 390pt alatt; (2) a closers-sor
+tördelése három hosszú névvel (`Trevon BLUIETT (42%), KRIVACSEVICS Markó
+(17%), HALMAI Dániel (17%)`); (3) a `StatList` 9 sora + a `Megállapítás`
+együtt sok görgetés a képernyő alján. Érvényben marad a korábbi lelet: a
+csomagolt betűkészletekből hiányzik az `ő`/`ű` glifa – ez itt a
+„Büntetőráta" mutatót és az olyan neveket érinti, mint „SZŐKE". A kosarstat
+nem fix időablaka miatt a mintahossz meccsenként változó (D-089). A P12 lila
+aktív tab-állapota és a tab layout véglegesítése (az S6 utolsó nyitott sora)
+továbbra is hátravan.
+
+**Commit:** `feat: Clutch-bontás a Meccs részletein` (+ `core: @core szinkron –
+clutch parser kihagyja a CSAPAT összegsort`)
+
+---
 
 ## 2026-09-02 – A scouting és a szerepkör-elemzés közös adatrétege
 
@@ -3398,3 +3474,58 @@ egybeesik a tartalék SG-szűrővel), tehát a döntés most nem mozdít a
 kimeneten – de a heurisztika mostantól tud működni. A `@core` javítása (a
 `resolveRoleKey` használata a halmaz helyett) a webprojektre tartozik.
 **Visszavonható?** Igen, a `lib/team-season-stats` `buildRosters`-ében.
+
+## D-088 – A clutch parser `CSAPAT` összegsor hibája javítva a webprojektben
+**Dátum:** 2026-09-02
+**Döntés:** A `@core/kosarstat-clutch-parse` `parseClutchTeamTable`-jét nem a
+`core/` mappában patcheltük, hanem a webprojektben
+(`asestats/lib/kosarstat-clutch-parse.ts`): a játékos-kihagyó feltétel most a
+`csapat` és `total` névre is illeszkedik, nem csak a `jatekos` / `ossz*`-ra.
+Utána `npm run sync:core` és külön `core:` commit.
+**Miért:** A kosarstat clutch-tábla záró sora a csapatösszeg (`CSAPAT`), amit
+a parser eddig játékosként dolgozott fel. Emiatt minden csapatösszeg
+duplázódott (`ownPoints`/`oppPoints`/`diff`/`turnovers`), a mintahossz a
+tényleges ~5:00 helyett 25:00-ra ugrott, és a `CSAPAT` sor a
+`topUsageClosers` élére került. A ráta-mutatók túlélték, mert számláló és
+nevező is duplázódott. Ez a webet is érinti (a `GameDetails.tsx` ugyanezt
+hívja, és a duplázott számok bemennek az AI-riport promptokba) – ezért a
+javítás helye a webprojekt, a `CLAUDE.md` „`core/`-t soha ne szerkeszd"
+szabálya szerint.
+**Alternatíva:** a `core/` másolat kézi patchelése (tiltott), vagy a
+duplázott mezők megkerülése a mobil nézetmodellben (a `sampleLabel`, a
+pontállás, a closers-lista így is hibás maradna).
+**Visszavonható?** Igen, de nem érdemes – a régi viselkedés bizonyítottan
+hibás.
+
+## D-089 – A clutch nem fix 5 perces időablak, a szövegek a minta hosszát írják ki
+**Dátum:** 2026-09-02
+**Döntés:** A `lib/clutch-view.ts` szövegei (fejléc, lábjegyzet,
+`Megállapítás`) sehol nem hivatkoznak „utolsó 5 percre"; a `sampleLabel`
+értékét (`MM:SS`) viszont mindig kiírják, és a magyarázat „a ±5 pontos
+állásnál játszott percek összessége".
+**Miért:** A kosarstat „Clutch statisztikák" oldala nem fix időablakot ad: a
+mért ASE-meccseken a minta 05:00 és 15:00 között szór (2025.09.27: a
+játékossorok 15:00-sak, a `CSAPAT` sor 75:00 = 15:00 × 5 ötös csapat). „Utolsó
+5 perc"-nek nevezni tehát a hosszabb mintáknál tárgyi tévedés lenne. A
+webprojekt `export-to-md.ts`-e még „(±5 pont, utolsó 5 perc)"-ként címkézi –
+ez a weben pontatlan, de a mobil scope-on kívül van.
+**Alternatíva:** a webbel egyező „utolsó 5 perc" felirat (a hosszabb
+mintáknál hibás), vagy a mintahossz elrejtése (a felhasználó nem látná,
+mekkora adatra épül).
+**Visszavonható?** Igen, a `clutch-view.ts` szövegeiben.
+
+## D-090 – A Clutch szekció mindig látszik, adathiánynál magyarázó sorral
+**Dátum:** 2026-09-02
+**Döntés:** A Meccs részletein a `Clutch` szekció (címke + `ClutchPanel`)
+mindig ki van rajzolva. Ha nincs kosarstat clutch-oldal (`missing`), vagy a
+minta 60 mp alatti (`notClose`), a szekció egy magyarázó `Text` sort mutat,
+nem tűnik el. A `Megállapítás` szövege sablonból áll össze a `@core`
+számaiból.
+**Miért:** A `QuarterScores` már ugyanígy viselkedik (D-047), és a
+felhasználónak a hiányt is látnia kell: az „eltűnő szekció" azt a benyomást
+keltené, hogy a képernyő hiányos. A `Megállapítás` a mobil app AI-mentessége
+miatt sablon (D-076 mintája).
+**Alternatíva:** a szekció elrejtése adathiánynál (a képernyő
+kiszámíthatatlanul változna meccsről meccsre), vagy AI-összegzés (a mobil app
+nem generál tartalmat).
+**Visszavonható?** Igen, a `[id].tsx`-ben a szekció feltételessé tételével.
