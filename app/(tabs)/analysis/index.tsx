@@ -5,15 +5,14 @@
  * Fejléc, nagy cím, majd az „AI riportok" szekció: fajta szerinti szűrő-chipek
  * és a riportkártyák, a legfrissebb elöl. Egy kártya a riportolvasót nyitja.
  *
- * A P12 „Számított elemzések" szekciójából csak az elkészült képernyők sora
- * áll itt: a Szituációk és az Ellenfél scouting. A szerepkör-elemzés a saját
- * feladatában kerül be – halott navigációs sor nincs (D-066, D-073).
+ * A P12 „Számított elemzések" szekciója mostantól mind a három sort viszi:
+ * Szituációk, Ellenfél scouting és Szerepkör-elemzés (D-066, D-073).
  */
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Crosshair, FileSearch, Sparkles, Swords } from 'lucide-react-native';
+import { Crosshair, FileSearch, Sparkles, Swords, Users } from 'lucide-react-native';
 
 import { AppHeader } from '@/components/AppHeader';
 import { ChipRow } from '@/components/ChipRow';
@@ -75,6 +74,14 @@ export default function AnalysisScreen() {
         description="Esély, veszélyforrások, kulcsemberek"
         tone="orange"
         onPress={() => router.push('/analysis/scouting')}
+        style={styles.navRowStacked}
+      />
+      <NavRow
+        icon={Users}
+        title="Szerepkör-elemzés"
+        description="Ki mit tesz hozzá a csapatjátékhoz"
+        tone="positive"
+        onPress={() => router.push('/analysis/roles')}
         style={styles.navRow}
       />
 

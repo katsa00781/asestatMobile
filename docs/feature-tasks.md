@@ -81,7 +81,7 @@
 - [x] **Riportolvasó** (`app/(tabs)/analysis/[id].tsx`) – egy riport teljes szövege, szekciócímekkel és megállapítás-listával
 - [x] **Elemzés – Szituációk** (`app/(tabs)/analysis/situational.tsx`) – a P12 „Számított elemzések" szekciójának első sora és a P13 képernyő: hazai/vendég összehasonlítás, szoros/kiütéses és félidei helyzetek, negyedbontás, four factors (`@core/situational-analysis`)
 - [x] **Elemzés – Ellenfél scouting** (`app/(tabs)/analysis/scouting.tsx`) – a következő ellenfél erősségei és gyengéi (`@core/pregame-scouting`)
-- [ ] **Elemzés – Szerepkör-elemzés** – ki mit tesz hozzá a csapatjátékhoz (`@core/team-analysis`)
+- [x] **Elemzés – Szerepkör-elemzés** – ki mit tesz hozzá a csapatjátékhoz (`@core/team-analysis`)
 - [ ] Clutch bontás a **Meccs részletein** (`@core/kosarstat-clutch-parse`) – szezonszintű clutch nézet nincs (D-069)
 - [ ] Tab layout véglegesítése: 5 tab ikonokkal, aktív állapot cián glow-val, safe area alul
 
@@ -134,6 +134,123 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Szerepkör-elemzés képernyő (számított elemzések, 3/3)
+
+**Mit:** Elkészült a P12 „Számított elemzések" szekciójának harmadik sora és a
+mögötte álló képernyő: a `@core/team-analysis` teljes csapatmodellje mobilon.
+A hubon most mind a három navigációs sor áll (Szituációk, Ellenfél scouting,
+Szerepkör-elemzés – emberek ikon, zöld, a prompt szerint). A képernyő a
+szűrőben kiválasztott csapatot elemzi, szegmentált kontrollal három nézetben.
+
+*Adat.* Új tiszta modul: `lib/team-season-stats.ts`, és rá az új
+`useTeamRolesData` hook. Három lekérdezés fut, mind a kiválasztott szezonra:
+(1) `games` – csapatonként meccsszám, szerzett és kapott pont, plusz a
+meccsek **párosítása**; (2) a szezon `player_game_stats` táblája –
+csapatösszegzéshez, meccsenként a csapathoz kötve; (3)
+`player_season_stats_by_season` – a keretek játékossorai. A percentilis-mezőny
+a liga összes csapatából épül (`buildTeamBenchmarks`), ezért a lekérdezés itt
+sem szűkül egy csapatra (D-077 mintája). Az adat szezononként cache-elődik: a
+csapat váltása nem indít új lekérdezést, csak újraszámol.
+
+*Ellenfél-oldali adat.* A `TeamSeasonStat.opponent` blokk most **összeáll**: a
+két csapatperspektíva sorait dátum + a két eredmény halmaza + tükrözött
+hazai/vendég oldal párosítja (D-081). Ezzel valós a tempó, a védekező és a
+nettó rating, és a védekezési stílusjegyek is előjönnek – a scouting képernyő
+D-079-es korlátja ezen a képernyőn nem áll fenn.
+
+*Szerepkörök.* Az adatbázis nem tárol szerepkört: a `@core/player-analysis`
+`analyzePlayerSeason`-je vezeti le a szezonstatisztikából, a liga
+játékos-percentiliseihez mérve, ahogy a webprojekt is (D-082).
+
+*Megjelenítési modell.* Új modul: `lib/roles-view.ts` – tiszta, hálózat
+nélküli fájl, ami a `TeamAnalysis`-ból kész sorokat, sávértékeket,
+lábjegyzeteket és a három összegző szöveget állítja elő. A képernyő csak
+elrendez.
+
+*Szegmensek.* **Szerepkörök**: a 16 kategória három diszjunkt listában –
+lefedett (1–2 emberrel), többszörösen lefedett (3-tól), hiányzó –, mindegyik
+alatt a betöltő játékosokkal, végül a modell keret-értelmezése. **Terhelés**:
+a két legtöbbet birtokló ember aránya, a posztonkénti játékpercek
+arányjelzőkkel, az átlagmagasság és a keretkockázati jelzések. **Csapatkép**:
+liga-klaszter és stílusjegyek badge-ekben, klasztertársak, a 11 liga-
+percentilis sávokkal, majd erősségek, korlátok és kockázatok. Mindhárom nézet
+alján lábjegyzet mondja meg, mekkora mintán áll, és egy `Megállapítás` kártya
+foglalja össze a látottakat.
+
+*Komponensek.* Egy új: `MeterList` (címke + érték + sáv + magyarázó sor). A
+`PointList`, a `ProfilePanel`, az `InsightCard` és a `SegmentedControl`
+változatlanul a scouting és a Szituációk képernyőről jön.
+
+**Eltérések, hiányok:**
+
+- A `@core` félig angol feliratai a nézetmodellben magyarra cserélődnek: a
+  szerepkörkulcsok a `ROLE_LABELS_HU` szerint („Energy Big hiány" →
+  „Energikus magas hiány"), a klaszternevek saját táblából („Defense-first" →
+  „Védekezés-központú"), a percentilis-sorok feliratai szintén (D-084).
+- A `@core` **prózájában** maradt angol szakszó („playmaking", „spot-up",
+  „pick-and-roll", „rim protector", „mismatch", „self-creation") – ezeken csak
+  a webprojektben lehet változtatni, a `core/` mappa nem szerkeszthető.
+- A **leíró** percentilisek (tempó, dobásmegoszlás, labdaigény, magasemberes
+  perc) semleges cián sávot kapnak, nem zöld/sárga/pirosat: ott a magas érték
+  nem „jobb", csak másfajta játék (D-085).
+- Ahol a keretadat csak generikus „G" posztot tartalmaz (2024/2025-ben az ASE
+  kivételével minden csapat, 2025/2026-ban a PVSK-VEOLIA és a Szolnoki
+  Olajbányász), ott a modell mindenkit ugyanabba a bucketbe sorol, és 16-ból
+  csak 3–4 szerepkör jön ki. Ez adatprobléma, nem a képernyőé – a saját
+  csapatunknál mindkét szezonban teljes a poszt- és magasságadat.
+- A `Megállapítás` szövege itt is **sablonból** áll össze a modell számaiból,
+  nem AI-ból (D-076 mintája).
+
+**Fájlok:** `app/(tabs)/analysis/roles.tsx` (új),
+`app/(tabs)/analysis/index.tsx` (harmadik navigációs sor),
+`hooks/useTeamRolesData.ts` (új), `lib/team-season-stats.ts` (új),
+`lib/roles-view.ts` (új), `types/roles.ts` (új),
+`components/MeterList.tsx` (új)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan. A teljes lánc
+(három lekérdezés → `analyzeTeamSeason` → `buildRolesView`) élesben, a kliens
+anon kulcsával lefuttatva **mind az 5 szezonra × a liga összes csapatára**:
+2025/2026-ban 16, 2024/2025-ben 14 csapat, sehol `NaN`, `Infinity` vagy
+`undefined` a nézetmodell egyetlen mezőjében sem, és minden csapathoz van
+keret. A két üres szezon (2023/2024, 2026/2027) és a 2022/2023 (nincs
+szezontáblája) az üres állapotra fut. Idők laptopról: 2025/2026 – 723
+meccssor, 7402 játékos-meccssor, 275 keretsor, 1.0 s; 2024/2025 – 0.5 s. A
+meccspárosítás fedettsége méréssel: 2025/2026-ban 698/723 sor, 2024/2025-ben
+362/366, és minden elfogadott pár hazai/vendég oldala tükrözött (0 kivétel).
+Az így kapott tempó reális (ASE 2025/2026: 74.8, 2024/2025: 77.9 birtoklás),
+szemben az ellenfél-adat nélküli feleződéssel. Az ASE nézete mindkét szezonra
+végigolvasva: 2025/2026 – 13 fős keret, 13 lefedett és 3 hiányzó szerepkör,
+38.2% top2 labdaigény, 196.8 cm átlagmagasság, „Félpályás, játékszervező-
+központú" klaszter (2/16 csapat), 48/58 meccsre van ellenfél-oldali adat;
+2024/2025 – 15 fős keret, 15 lefedett és 1 hiányzó szerepkör, 194.2 cm,
+„Védekezés-központú" klaszter (1/14), 26/26 párosított meccs. A csomagolt
+betűkészletek `cmap` táblája újra ellenőrizve mind a 7 fájlra: az `ő`/`ű`
+továbbra is hiányzik mindegyikből, a többi magyar ékezet, a `·` és a `–`
+viszont mindegyikben megvan. `npx expo export` iOS-re és Androidra lefut;
+mindkét Hermes bundle tartalmazza a képernyő feliratait („Szerepkör-elemzés",
+„Lefedett szerepkörök", „Többszörösen lefedve", „Hiányzó szerepkörök",
+„Keret-értelmezés", „Játékpercek posztonként", „Liga-percentilisek",
+„Magasemberes játékperc", „Védekezés-központú", „Ki mit tesz hozzá a
+csapatjátékhoz", „Nincs elemezhető keret") és a szezontáblát.
+
+**Nyitva maradt:** **Eszközön még nem futott.** Négy dolgot valós kijelzőn kell
+megítélni: (1) a „Szerepkörök" nézet hossza – lefedett + többszörös + hiányzó +
+keret-értelmezés együtt 25-30 sor, sok görgetés; (2) a `MeterList` 62pt-os
+értékoszlopa a leghosszabb alakkal (`100.0%`); (3) a három szegmens felirata
+(„Szerepkörök" a legszélesebb) a 36pt-os kontrollban 390pt alatt, Androidon;
+(4) a négynél több nevet tartalmazó sorok tördelése („+3" utótaggal).
+Nyitva marad, hogy a **scouting** képernyő továbbra is a D-079-es korláttal
+fut, pedig a D-081-es párosítás ott is használható lenne – a két hook
+lekérdezése ezzel egyesíthető is volna (`lib/team-season-stats`). Érvényben
+marad a korábbi lelet: a csomagolt betűkészletekből hiányzik az `ő`/`ű`
+glifa – ez itt az „Erősségek", az „Elsődleges irányító", az „Erőcsatár" és a
+„Gyűrűvédő" szövegét érinti. A P12 lila aktív tab-állapota továbbra is nyitva
+van.
+
+**Commit:** `feat: Szerepkör-elemzés képernyő`
+
+---
 
 ## 2026-09-02 – Ellenfél scouting képernyő (számított elemzések, 2/3)
 
@@ -3070,3 +3187,99 @@ választás („Következő ellenfél" / „Legutóbbi ellenfél" / „Választo
 ellenfél"). A választás nem perzisztálódik: a képernyő elhagyásával
 visszaáll az alapértelmezés.
 **Visszavonható?** Igen, a `useScoutingData` `fallback` blokkja.
+
+## D-081 – Az ellenfél-oldali statisztika a meccsek párosításából áll össze
+**Dátum:** 2026-09-02
+**Döntés:** A `TeamSeasonStat.opponent` blokkot a két csapatperspektíva
+párosítása tölti fel: azonos dátum + azonos eredményhalmaz + más-más csapat +
+tükrözött hazai/vendég oldal. Ami nem így párosul, az kimarad.
+**Miért:** A `@core/team-analysis` `normalizeTeamStats`-e az `opponent` blokk
+nélkül a tempót a felére viszi, a védekező és a nettó ratinget nullázza, a
+támadólepattanó-arányt pedig 100%-ra állítja – a liga-percentilisekből három
+sor és a védekezési stílusjegyek mind értelmezhetetlenné válnának. A D-079 a
+scoutingnál még **névegyezéssel** próbálta a párosítást, ott 82% jött ki; az
+eredmény + dátum + oldal hármas viszont méréssel 2025/2026-ban 698/723,
+2024/2025-ben 362/366 sort köt össze, és **egyetlen** elfogadott párnál sem
+tér el a hazai/vendég oldal. A 25 kimaradó sor egy adatbeviteli hibából jön
+(ott mindkét csapat sora ugyanazt az eredményt írja a saját oldalára), nem a
+módszerből.
+**Alternatíva:** (a) `opponent` nélkül – hamis tempó és nulla védekező rating;
+(b) a három érintett percentilis-sor elrejtése – a csapatkép fele elveszne;
+(c) névegyezéses párosítás (D-079) – rosszabb fedettség.
+**Következmény:** A lábjegyzet kiírja, hány meccsre állt össze az
+ellenfél-adat, és ha a `@core` hiányosnak látja, ezt is kimondja. A scouting
+képernyő egyelőre a D-079-es korláttal fut – ott a párosítás bevezetése külön
+feladat.
+**Visszavonható?** Igen, a `lib/team-season-stats` `pairGames` függvénye.
+
+## D-082 – A szerepkörök a statisztikából számolódnak, nem az adatbázisból
+**Dátum:** 2026-09-02
+**Döntés:** A keret szerepkörei a `@core/player-analysis`
+`analyzePlayerSeason`-jéből jönnek, a liga játékos-percentiliseihez
+(`buildLeagueBenchmarks`) mérve – nem tárolt mezőből.
+**Miért:** Az adatbázis nem tárol szerepkört, és a webprojekt is így vezeti le
+(`rolesByPlayerId`). Ha a mobil app mást csinálna, a két felület ugyanarra a
+keretre más szerepköröket mutatna. A `useScoutingData` üres `roles`-t ad át,
+mert ott a `@core` csak a labdahordozó felismeréséhez használná – itt viszont
+a szerepkör maga a képernyő tárgya, tehát nem hagyható ki.
+**Alternatíva:** (a) üres `roles` – a képernyőnek nem lenne tartalma;
+(b) pozícióból származtatott, saját szabály – eltérne a webtől.
+**Következmény:** A liga összes játékossorát fel kell dolgozni (275 sor
+2025/2026-ban), ez a lekérdezés után ~200 ms számítás. Ahol a keretadat csak
+generikus „G" posztot tartalmaz, ott a levezetés kevés különböző szerepkört ad
+– ez a bemenet hibája, nem a modellé.
+**Visszavonható?** Nem érdemes; a szerepkör a képernyő lényege.
+
+## D-083 – A lekérdezés és az összegzés külön tiszta modulban él
+**Dátum:** 2026-09-02
+**Döntés:** A szezon csapatmezőnyét előállító kód a `lib/team-season-stats.ts`
+tiszta moduljába került (React nélkül), a `useTeamRolesData` csak a szűrőt, a
+cache-t és a hibaállapotot kezeli.
+**Miért:** A `useSituationalData` és a `useScoutingData` a fetchet a hookban
+tartja, így a lánc csak futó appban ellenőrizhető. Ez a modul viszont
+node-ból is végigfuttatható (a `@/lib/supabase` egy anon kulcsos klienssel
+kiváltva), és a teljes lánc – lekérdezés → `TeamSeasonStat[]` →
+`analyzeTeamSeason` → `buildRolesView` – így mind az 5 szezonra × a liga
+összes csapatára lemérhető volt, még a képernyő elindítása előtt.
+**Alternatíva:** minden a hookban, a két testvér-hook mintájára – konzisztens,
+de a lánc csak kézzel, eszközön ellenőrizhető.
+**Következmény:** A jövőbeli összevonásnak (`useScoutingData` ugyanezt a három
+lekérdezést futtatja) van hova költöznie.
+**Visszavonható?** Igen, a modul beolvasztható a hookba.
+
+## D-084 – A `@core` angol szakszavai a nézetmodellben magyarra cserélődnek
+**Dátum:** 2026-09-02
+**Döntés:** A `lib/roles-view` a `@core` szövegeiben lecseréli az angol
+szerepkörkulcsokat a `ROLE_LABELS_HU` feliratára, a klaszterneveket saját
+táblából fordítja („Transition-heavy" → „Lerohanás-fókuszú", „Defense-first" →
+„Védekezés-központú", „Halfcourt, playmaker-domináns" → „Félpályás,
+játékszervező-központú"), a liga-percentilis sorok feliratait pedig kulcs
+szerint magyarra írja („FT rate" → „Büntetőráta").
+**Miért:** A `CLAUDE.md` magyar UI-t ír elő, a `@core` viszont félig angol
+címkéket ad, és a `core/` mappa nem szerkeszthető. A csere a megjelenítési
+rétegben marad, a modell számai és logikája érintetlenek.
+**Alternatíva:** (a) a `@core` szövegének kiírása változatlanul – „Energy Big
+hiány" a magyar képernyőn; (b) javítás a webprojektben és szinkron – helyes,
+de a webes UI-t is átírná, ez külön egyeztetés.
+**Következmény:** A `@core` **prózájában** maradt szakszavak („playmaking",
+„spot-up", „pick-and-roll", „rim protector") változatlanok: ezek nem
+kulcsszavak, kulcs szerint nem cserélhetők.
+**Visszavonható?** Igen, a `coreText` és a `CLUSTER_LABELS` eltávolításával.
+
+## D-085 – A leíró percentilisek semleges színt kapnak
+**Dátum:** 2026-09-02
+**Döntés:** A liga-percentilis sávok színe csak a teljesítménymutatóknál
+minőségi (60-tól zöld, 40-től sárga, alatta piros). A tempó, a kétpontos és
+hármas arány, a labdaigény-koncentráció és a magasemberes játékperc semleges
+cián sávot kap.
+**Miért:** A `@core` `percentileLabel`-je minden sorra minőségi címkét ad
+(„Liga elit" … „Liga gyenge"), de a magas tempó vagy a magas kétpontos arány
+nem jobb, csak másfajta játék – zöldre színezve viszont a felhasználó
+erénynek olvasná. A kockázati és hatékonysági mutatóknál (hármas %,
+büntetőráta, assziszt arány, támadó/védekező/nettó rating) a minőségi olvasat
+viszont helyes.
+**Alternatíva:** (a) mind minőségi – félrevezető; (b) mind semleges – a valódi
+erősségek és gyengeségek eltűnnének.
+**Következmény:** A `@core` tier-felirata („Liga elit") minden sor alatt ott
+marad, tehát a besorolás olvasható, csak a szín nem sugall értékítéletet.
+**Visszavonható?** Igen, a `DESCRIPTIVE_KEYS` halmaz ürítésével.
