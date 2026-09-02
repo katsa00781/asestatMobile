@@ -77,7 +77,10 @@
 - [x] **Játékosok – lista** (`app/(tabs)/players/index.tsx`) – szezon-aggregált lista, rendezés, névkeresés. Mockup: `Jatekosok Lista`
 - [x] **Játékos részletei** (`app/(tabs)/players/[id].tsx`) – szezonstatisztika, meccsenkénti bontás, mentett játékos-riportok
 - [x] **Tabella** (`app/(tabs)/standings.tsx`) – bajnoki tabella saját sorkomponenssel. Mockup: `Tabella`
-- [ ] **Elemzés** (`app/(tabs)/analysis/index.tsx`) – mentett AI riportok listája (pregame / postgame / játékos / csapat) + számított elemzések a `@core`-ból (szituációk, four factors, clutch)
+- [x] **Elemzés – hub** (`app/(tabs)/analysis/index.tsx`) – a mentett AI riportok listája egy helyen (meccs / csapat / játékos), fajta szerinti szűrő-chipekkel
+- [x] **Riportolvasó** (`app/(tabs)/analysis/[id].tsx`) – egy riport teljes szövege, szekciócímekkel és megállapítás-listával
+- [ ] **Elemzés – számított elemzések** – a P12 „Számított elemzések" szekciója: Szituációk (`@core/situational-analysis`: hazai/vendég, szoros/kiütéses, félidei vezetés, negyedbontás, four factors), Ellenfél scouting (`@core/pregame-scouting`), Szerepkör-elemzés (`@core/team-analysis`)
+- [ ] Clutch bontás a **Meccs részletein** (`@core/kosarstat-clutch-parse`) – szezonszintű clutch nézet nincs (D-069)
 - [ ] Tab layout véglegesítése: 5 tab ikonokkal, aktív állapot cián glow-val, safe area alul
 
 ---
@@ -129,6 +132,84 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Elemzés hub és riportolvasó
+
+**Mit:** Elkészült az S6 hetedik képernyője és a hozzá tartozó olvasónézet: az
+`Elemzés` tab helyőrzője helyén most a mentett AI riportok listája áll, egy
+kártyáról pedig megnyílik a riport teljes szövege.
+
+*Adat.* Új hook: `useAnalysisReports`. A három riporttábla (`game_text_reports`,
+`team_text_reports`, `player_text_reports`) párhuzamosan, közvetlen SELECT-tel
+töltődik, és **egyetlen** listába fésülődik össze, generálási idő szerint
+csökkenő sorrendben. A meccsriportokon nincs `season_id` / `team_id` oszlop,
+ezért ott a beágyazott `games!inner` sor szűr – a lista így nem függ attól,
+hogy a Meccsek tab betöltött-e már. Az olvasó **nem** kér új adatot: a riportot
+azonosító szerint a hub cache-éből veszi elő (D-046 mintája).
+
+*Szövegformázás.* A riportok nyers szövege markdown félkövér jelölést
+(`**...**`) és a csomagolt betűkészletekből **hiányzó** jeleket tartalmaz. Új
+modul: `lib/report-format.ts` – blokkokra bontja a szöveget (szekciócím,
+megállapítás, indoklás, bekezdés), a `✓` / `↺` / `✗` sorkezdő jelekből lucide
+ikonos megállapítás lesz (D-064), a `1️⃣` billentyű-szekvenciából `1.`.
+Ugyanez a modul adja a kártyák egysoros összefoglalóját is.
+
+*Komponensek.* Kettő új: `ReportListCard` (88pt-os kártya bal 3pt lila sávval:
+badge + dátum, cím, első mondat) és `ReportBody` (a riport törzse, bal szélén
+elhalványuló lila gradiens sávval, `expo-linear-gradient`-tel).
+
+**Eltérések, hiányok:**
+
+- A P12 **„Számított elemzések" szekciója még nincs benne** (D-066): külön
+  feladat, hogy ne álljon a hubon olyan navigációs sor, ami sehová nem vezet.
+- A listán **fajta szerinti szűrő-chipek** vannak, amit a P12 nem ír elő
+  (D-067) – 35 riport egy szűretlen görgetésben nem kezelhető.
+- A meccsriportok címe a csapatok **rövid nevével** áll
+  (`Atomerőmű — Kaposvár`), a D-058 tabellás döntés mintájára.
+- A kártyán a **generálás** dátuma áll (ahogy a P12 is írja); a meccs dátuma
+  és eredménye az olvasó meta sorába került.
+- A szekciócím felismerése heurisztika (D-065): a csapatriportok nem jelölik
+  a címeket, csak a sor hossza és a záró írásjel különbözteti meg őket.
+- Szezonszintű **clutch nézet nincs** (D-069); a `parseGameClutch` a Meccs
+  részletein a helye, külön feladatként.
+- A `ReportCard` (meccs- és játékosképernyő) mostantól szintén a
+  `plainReport`-on átengedett szöveget mutatja – így ott sem látszik a `**`
+  jelölés és a tofu.
+
+**Fájlok:** `app/(tabs)/analysis/index.tsx` (helyőrző helyett a képernyő),
+`app/(tabs)/analysis/[id].tsx` (új), `hooks/useAnalysisReports.ts` (új),
+`lib/report-format.ts` (új), `components/{ReportListCard,ReportBody}.tsx`
+(mind új), `components/ReportCard.tsx` (normalizált szöveg),
+`data/report-kinds.ts` (új), `types/analysis.ts` (új)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan. A blokkbontó a
+**mind a 35 valós riporton** lefuttatva: 138 szekciócím, 213 bekezdés, 79
+megállapítás, 65 indoklás; üres összefoglaló egy riportnál sincs, a leghosszabb
+cím 44 karakter. A három lekérdezés élesben, a kliens anon kulcsával
+ellenőrizve (2025/2026, ASE): 24 meccs- + 4 csapat- + 7 játékosriport = 35 sor,
+a beágyazott `games!inner` és `players!inner` szűrés működik. A hiányzó glifák
+a betűfájlok `cmap` táblájából ellenőrizve: a `→` `✓` `✗` `↺` `U+FE0F` `U+20E3`
+egyik csomagolt betűkészletben sincs meg, a helyükre tett `–` `+` `−` `±`
+viszont mindegyikben. `npx expo export` iOS-re és Androidra lefut; mindkét
+Hermes bundle tartalmazza a képernyők feliratait („AI riportok", „Riport
+fajtája", „Nincs mentett riport", „Nincs meg a riport", „Generálva:",
+„Szurkolói", „szezonértékelés", „AI-elemzője") és az `ExpoLinearGradient`
+hivatkozást.
+
+**Nyitva maradt:** **Eszközön még nem futott.** Négy dolgot valós kijelzőn kell
+megítélni: (1) a 2pt-os elhalványuló gradiens sáv láthatósága a hosszú
+szövegtörzs mellett; (2) a 88pt-os kártya három sora a leghosszabb címekkel
+(44 karakter, egy sorra vágva); (3) a 35 kártyás lista görgetésének
+folyamatossága Androidon; (4) a megállapítás-ikonok (`Check` / `RotateCcw` /
+`X`) igazodása a 15pt-os szöveg első sorához. Érvényben marad a korábbi lelet:
+a csomagolt betűkészletekből hiányzik az `ő`/`ű` glifa – ez itt az
+„Atomerőmű", a „Szurkolói"→„Edzői" badge és a riportszövegek nagy részét
+érinti. Nyitva van még a P12 lila aktív tab-állapota: a `TabBar` minden tabot
+ciánnal jelöl, a tab layout véglegesítése külön sor a listában.
+
+**Commit:** `feat: Elemzés hub és riportolvasó`
+
+---
 
 ## 2026-09-02 – Tabella képernyő
 
@@ -2506,3 +2587,104 @@ garantált), vagy a sáv elhagyása (a kiemelés fele veszne el).
 **Következmény:** A kiemelt sor háttere 16-16pt-tal szélesebb, mint a
 mockupban.
 **Visszavonható?** Igen, a `StandingsRow` elrendezése egy helyen áll.
+
+## D-064 – A riportok hiányzó glifái blokk-jelölővé, nem karakterré válnak
+**Dátum:** 2026-09-02
+**Döntés:** A riportszöveg sorkezdő `✓` / `↺` / `✗` jeleiből saját blokktípus
+(`outcome`) lesz, amit a `ReportBody` lucide `Check` / `RotateCcw` / `X`
+ikonnal rajzol ki, hangnem szerinti színben. A `→` sorokból behúzott indoklás
+lesz, a `1️⃣` billentyű-szekvenciából `1.` számozás. Szövegközi előfordulásra
+tartalék karakterek állnak (`–` `+` `±` `−`).
+**Miért:** A csomagolt három betűcsalád mind subset, a `cmap` táblájuk 222–229
+kódpontot tartalmaz, és a `U+2192` `U+2713` `U+2717` `U+21BA` `U+FE0F`
+`U+20E3` **egyikben sincs benne** (ellenőrizve mind a hét fájlon). Hiányzó
+glifánál Android tofut rajzol – ez ugyanaz a lelet, mint D-031-nél, és
+ugyanaz a megoldás: ikon a karakter helyett. A tartalék karakterek (`–` `+`
+`±` `−`) viszont mindegyik betűfájlban megvannak.
+**Alternatíva:** (a) teljes, nem subsetelt betűfájlok – három fájl mérete nőne
+hat glifáért; (b) a jelek elhagyása – elveszne, hogy egy fókuszpont teljesült,
+részben teljesült vagy nem teljesült.
+**Visszavonható?** Igen, a leképezés a `lib/report-format.ts` két
+konstansában áll.
+
+## D-065 – A szekciócímet heurisztika ismeri fel, nem jelölés
+**Dátum:** 2026-09-02
+**Döntés:** Szekciócím az a sor, amelyik (a) számozott billentyű-szekvenciával
+kezdődik, vagy (b) legfeljebb 70 karakter és nem `.` `!` `?` `:` `…` jelre
+végződik. Minden más bekezdés.
+**Miért:** A három riporttábla háromféle szöveget hoz: a meccsriportok
+`1️⃣`-tel és `**...**`-gal jelölik a szekciókat, a csapatriportok **sehogy**
+(„Összkép", „Forma — utolsó hetek" egyszerű sorok), a játékosriportok pedig
+csak bekezdéseket tartalmaznak. Markdown-renderelő nélkül (új könyvtár lenne)
+csak a szöveg alakjából lehet dönteni. A heurisztika mind a 35 valós riporton
+lefuttatva 138 címet ad, hibás besorolás nélkül; a leghosszabb valódi cím 42
+karakter, tehát a 70-es korlát bőven tartalékos.
+**Alternatíva:** (a) `react-native-markdown-display` vagy hasonló – új
+függőség egy olyan szövegre, ami félig sem markdown; (b) minden sor bekezdés –
+a hosszú riportok tagolatlanná válnának.
+**Visszavonható?** Igen, a `lib/report-format.ts` `toBlock` függvénye egy
+helyen áll; ha a webprojekt egyszer egységesen jelöli a címeket, arra
+cserélhető.
+
+## D-066 – Az Elemzés hub először csak a riportokat viszi
+**Dátum:** 2026-09-02
+**Döntés:** A P12 mockup két szekciója közül elsőként csak az „AI riportok"
+készült el; a „Számított elemzések" három navigációs sora (Szituációk,
+Ellenfél scouting, Szerepkör-elemzés) külön feladat, és addig **nem** jelenik
+meg a képernyőn.
+**Miért:** A három számított elemzés három önálló képernyő, saját
+lekérdezésekkel (`kosarstat_game_quarter_stats`, `kosarstat_game_team_metrics`,
+liga-szintű csapatstatisztika). Ezek nélkül a navigációs sorok halott
+gombok lennének. A riportolvasás önmagában is teljes, használható funkció, és
+ez a tab addig sem marad helyőrző.
+**Alternatíva:** (a) az egész tabot egy feladatban – szembemenne az „egy
+feladat, egy commit" szabállyal; (b) letiltott navigációs sorok kirakása – a
+felhasználónak félkész app benyomását adná.
+**Visszavonható?** Igen, a szekció beszúrása a hub képernyőn egy blokk.
+
+## D-067 – A riportlista fajta szerinti szűrő-chipeket kap
+**Dátum:** 2026-09-02
+**Döntés:** A hub listája fölött `ChipRow` áll négy chippel (Mind / Meccs /
+Csapat / Játékos), amit a P12 nem ír elő.
+**Miért:** A P12 négy riportkártyát mutat; a valóságban a 2025/2026-os
+szezonban az ASE-hez **35** riport tartozik (24 meccs, 4 csapat, 7 játékos).
+A négy csapatriport a generálási idő szerinti sorrendben a lista közepére
+kerülne, tehát szűrő nélkül gyakorlatilag megtalálhatatlan. A chipsor a már
+meglévő, jóváhagyott `ChipRow` komponens, ugyanazzal a vizuális nyelvvel, mint
+a játékoslista rendezés-chipjei – nem új design elem.
+**Alternatíva:** (a) fajtánként külön szekció egy görgetésben – a
+„legfrissebb elöl" sorrend veszne el; (b) szűrő nélkül – a csapat- és
+játékosriportok elérhetetlenek maradnának.
+**Visszavonható?** Igen, a chipsor a hub képernyő egy blokkja.
+
+## D-068 – A riportolvasó a hub cache-éből dolgozik, nem kérdez rá újra
+**Dátum:** 2026-09-02
+**Döntés:** Az `analysis/[id]` képernyő a `useAnalysisReports` listájából
+keresi ki a riportot azonosító szerint; ha nincs benne (időközben átállt a
+szűrő), üres állapot jön, nem hibaüzenet és nem új lekérdezés.
+**Miért:** A riport teljes szövege már a listával együtt megérkezett – a
+`narrative` oszlop az, amiből az összefoglaló is készül. Külön lekérdezés
+ugyanazt a sort töltené le még egyszer, és a kártyáról az olvasóra lépés
+hálózati kört várna. Ugyanaz a minta, mint a meccs- és játékosrészleteknél
+(D-046).
+**Alternatíva:** Azonosító szerinti pont-lekérdezés – ez működne mélylinkről
+is, de mobilon mélylink nincs, és a lista úgyis mindig előbb töltődik.
+**Következmény:** Az olvasó csak a szűrőben aktuális szezon és csapat
+riportjait tudja megnyitni.
+**Visszavonható?** Igen, a képernyő egy `find()` hívása cserélendő.
+
+## D-069 – Szezonszintű clutch nézet nem készül
+**Dátum:** 2026-09-02
+**Döntés:** A `@core/kosarstat-clutch-parse` **nem** kerül az Elemzés tabra
+szezonszintű aggregátumként; a helye a Meccs részletei képernyő, külön
+feladatként.
+**Miért:** A `parseGameClutch` nem statisztikatáblát olvas, hanem a
+`kosarstat_game_pages_raw` + `kosarstat_game_page_tables` **nyers HTML-tábláit**
+parse-olja, meccsenként. Egy szezon ~24 meccsére ez 24 nyers oldal letöltése és
+kliensoldali feldolgozása lenne egyetlen képernyő megnyitásakor – ez szemben
+áll a `CLAUDE.md` „lusta betöltés" elvárásával. A webprojekt is meccsszinten
+használja (`components/GameDetails.tsx`).
+**Alternatíva:** (a) szezonszintű aggregálás vállalva a költséget; (b)
+előszámolt clutch tábla a szerveren – sémamódosítás, ami a mobil scope-on kívül
+van.
+**Visszavonható?** Igen, a modul a `core/`-ban ott van, csak nincs hívója.

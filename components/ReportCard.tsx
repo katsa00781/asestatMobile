@@ -6,8 +6,12 @@
  * a fejléc felirata a `report_type`-ból jön. A szöveg több ezer karakter is
  * lehet, ezért alapból nyolc sorra csuklik össze, és a kártya alján lévő gomb
  * nyitja ki (D-049).
+ *
+ * A szöveg a `plainReport`-on megy át: a nyers riport markdown félkövér
+ * jelölést és a csomagolt betűkészletekből hiányzó jeleket is tartalmaz
+ * (D-064). A teljes, blokkokra bontott formázás a riportolvasóé (`ReportBody`).
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronDown, ChevronUp, FileText } from 'lucide-react-native';
 
@@ -15,6 +19,7 @@ import { GlowCard } from '@/components/GlowCard';
 import { colors, fontSize, letterSpacing, spacing, tapTarget, tracking } from '@/constants/theme';
 import { usePressed } from '@/hooks/usePressed';
 import { formatDate } from '@/lib/format';
+import { plainReport } from '@/lib/report-format';
 import type { GameReport, GameReportType } from '@/types/games';
 import type { PlayerReport, PlayerReportType } from '@/types/players';
 
@@ -41,7 +46,8 @@ interface ReportCardProps {
 
 export function ReportCard({ report }: ReportCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const expandable = report.narrative.length > EXPANDABLE_LENGTH;
+  const narrative = useMemo(() => plainReport(report.narrative), [report.narrative]);
+  const expandable = narrative.length > EXPANDABLE_LENGTH;
 
   return (
     <GlowCard accent="ai" corner="lg" padding={14} style={styles.card}>
@@ -66,7 +72,7 @@ export function ReportCard({ report }: ReportCardProps) {
         style={styles.narrative}
         numberOfLines={expandable && !expanded ? COLLAPSED_LINES : undefined}
       >
-        {report.narrative}
+        {narrative}
       </Text>
 
       {expandable ? (
