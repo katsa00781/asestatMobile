@@ -14,7 +14,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Badge } from '@/components/Badge';
 import { GlowCard } from '@/components/GlowCard';
 import { fontSize, letterSpacing, spacing, tracking } from '@/constants/theme';
-import { daysUntil, formatDateWithWeekday } from '@/lib/format';
+import { formatCountdown, formatDateWithWeekday } from '@/lib/format';
 import type { Fixture } from '@/types/games';
 
 interface NextGameCardProps {
@@ -53,7 +53,7 @@ export function NextGameCard({ fixture, ourName }: NextGameCardProps) {
           </Text>
 
           <Text className="text-center font-mono-bold text-xl text-cyan">
-            {countdown(fixture.gameDate)}
+            {formatCountdown(fixture.gameDate)}
           </Text>
         </>
       ) : (
@@ -71,16 +71,6 @@ function StatusBadge({ fixture }: { fixture: Fixture }) {
   }
 
   return <Badge label={fixture.isHome ? 'Hazai' : 'Vendég'} variant="cyan" />;
-}
-
-/** Nap pontosságú visszaszámláló – óra nincs, mert kezdési időpont sincs. */
-function countdown(gameDate: string): string {
-  const days = daysUntil(gameDate);
-
-  if (days === null) return '—';
-  if (days <= 0) return 'MA';
-  if (days === 1) return 'HOLNAP';
-  return `${days} NAP`;
 }
 
 const styles = StyleSheet.create({

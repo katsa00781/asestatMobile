@@ -95,3 +95,17 @@ export function daysUntil(iso: string): number | null {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return Math.round((target.getTime() - today.getTime()) / MS_PER_DAY);
 }
+
+/**
+ * Nap pontosságú visszaszámláló ALL CAPS-ban: `MA` / `HOLNAP` / `7 NAP`.
+ * Óra nincs benne, mert kezdési időpontot az adatbázis sem tárol (D-022, D-043).
+ * Érvénytelen vagy hiányzó dátumra „—".
+ */
+export function formatCountdown(iso: string): string {
+  const days = daysUntil(iso);
+
+  if (days === null) return '—';
+  if (days <= 0) return 'MA';
+  if (days === 1) return 'HOLNAP';
+  return `${days} NAP`;
+}

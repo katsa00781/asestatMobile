@@ -72,7 +72,7 @@
 ## S6 – Képernyők (prioritási sorrendben)
 
 - [x] **Ma** (`app/(tabs)/index.tsx`) – következő/legutóbbi meccs kártya, csapat KPI-ok StatTile-okban, gyors belépési pontok. Mockup: `Ma Screen`
-- [ ] **Meccsek – lista** (`app/(tabs)/games/index.tsx`) – lejátszott meccsek + közelgő fixtures, StackedRow-val
+- [x] **Meccsek – lista** (`app/(tabs)/games/index.tsx`) – lejátszott meccsek + közelgő fixtures, StackedRow-val
 - [ ] **Meccs részletei** (`app/(tabs)/games/[id].tsx`) – eredmény, negyedek, box score StatMatrix-ben, mentett pregame/postgame riport `GlowCard accent="ai"`-ban
 - [ ] **Játékosok – lista** (`app/(tabs)/players/index.tsx`) – szezon-aggregált lista, rendezés, névkeresés. Mockup: `Jatekosok Lista`
 - [ ] **Játékos részletei** (`app/(tabs)/players/[id].tsx`) – szezonstatisztika, meccsenkénti bontás, mentett játékos-riportok
@@ -129,6 +129,73 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Meccsek lista képernyő
+
+**Mit:** Elkészült az S6 második képernyője: a `Meccsek` tab helyőrzője helyén
+most a szezon teljes menetrendje áll, két szekcióban – felül a **Közelgő**
+találkozók, alatta a **Lejátszott** meccsek (dátum szerint csökkenő, a
+legfrissebb elöl). Az adat a meglévő `useGameData`-ból jön, plusz lekérdezés
+nélkül: a Ma képernyő ugyanezt a szűrőpáronkénti cache-t használja, tehát a
+tabváltás hálózati kör nélkül vált.
+
+*Sorok.* Új `components/GameRow.tsx` két exporttal (`GameRow`, `FixtureRow`).
+Mindkettő a meglévő `StackedRow`-ra épül: bal oldalt a vezérjel-körben a
+hazai/vendég jelzés (`H` / `V`), középen az ellenfél neve, alatta a dátum,
+jobbra a mono érték – lejátszott meccsnél az eredmény (`82–75`, nyert: zöld,
+vesztett: piros), közelgőnél a nap pontosságú visszaszámláló (`7 NAP`,
+elhalasztott meccsnél sárga). A két szekció oszlopszélessége közös (84pt), így
+a számok egy vonalban állnak. A közelgő sor nem nyomható – részletei csak
+lejátszott meccsnek vannak.
+
+*Szekciócímke.* Új `components/SectionLabel.tsx` – Barlow Condensed 11pt ALL
+CAPS, `accessibilityRole="header"`. A `FormStrip` eyebrow feliratának
+tipográfiája, csak külön komponensként, mert innentől több képernyőn kell.
+
+*Visszaszámláló.* A `NextGameCard` lokális `countdown()`-ja átkerült a
+`lib/format.ts`-be `formatCountdown()` néven, mert most a `FixtureRow` is
+ugyanezt írja ki. A viselkedés változatlan (`MA` / `HOLNAP` / `7 NAP` / `—`).
+
+**Eltérések, hiányok:**
+
+- **Mockup ehhez a képernyőhöz nincs** – a felépítés a `Jatekosok Lista`
+  mockup listaképernyőjét másolja (fejléc, cím + jobbra igazított mono
+  darabszám, 68pt-os surface1 sorok 8pt réssel, 16pt oldalmargó).
+- A **fordulószám** nem fér ki a sorba a dátum és az eredmény mellé, ezért
+  kimarad (D-045).
+- **Kereső és rendezés-chipek nincsenek**, pedig a játékoslista mockupján ott
+  vannak: egy szezon meccsei időrendben állnak, és egy képernyőnyi görgetéssel
+  átnézhetők.
+- **Lehúzásos frissítés még nincs** (a D-026 ígéri): a `useCachedQuery` ma nem
+  ad `refreshing` jelzést, mert a `reload()` alatt a `loading` végig hamis
+  marad (a régi adat látszik). Ez egy külön, minden képernyőt érintő lépés.
+
+**Fájlok:** `app/(tabs)/games/index.tsx` (helyőrző helyett a képernyő),
+`components/GameRow.tsx`, `components/SectionLabel.tsx` (mindkettő új),
+`components/NextGameCard.tsx` (a közös `formatCountdown`-ra állt át),
+`lib/format.ts` (`formatCountdown`)
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan. `npx expo
+export` iOS-re és Androidra lefut; **mindkét** Hermes bundle tartalmazza a
+képernyő feliratait (ékezetesekre UTF-16-ban is keresve): „Közelgő",
+„Lejátszott", „Nincs meccs", „Nyert", „Vesztett", „Elhalasztva", „HOLNAP", a
+darabszám „ meccs" utótagját és az eredményt elválasztó nagykötőjelet.
+Ellenőriztem a becsomagolt betűkészletek `cmap` tábláját is (mind a 7 ttf):
+a `–`, `—`, `−`, `·`, `…` glifa **mindegyikben megvan**, egyedül a `▾`
+hiányzik – ez erősíti a D-031-et, és igazolja a nagykötőjeles eredményt.
+
+**Nyitva maradt:** **Eszközön még nem futott.** A 84pt-os számoszlop
+háromjegyű eredménnyel (`102–100`) és a hosszú ellenfélnevek tördelése valós
+kijelzőn ítélhető meg; ugyanígy a `H` / `V` kör olvashatósága. A „Lejátszott"
+sorok a `games/[id]` helyőrzőre visznek, amíg a meccs részletei el nem
+készül. A képernyő egy `ScrollView`-ban rendereli az összes sort (D-044) –
+ha egy szezon meccsszáma jelentősen megnő, `SectionList`-re kell váltani.
+Képernyőolvasó a vezérjelet betűként mondja ki („H", „V"); ha ez zavaró,
+a `StackedRow` kaphat opcionális `accessibilityLabel` propot.
+
+**Commit:** `feat: Meccsek lista képernyő`
+
+---
 
 ## 2026-09-02 – Ma képernyő és tab váz
 
@@ -1823,3 +1890,42 @@ legjobban, mikor kezd a csapat. A „MA" és a „HOLNAP" külön eset, mert `0 
 vagy a visszaszámláló teljes elhagyása (a mockup egyik hangsúlyos eleme
 tűnne el).
 **Visszavonható?** Igen, ha a webprojekt felveszi a kezdési időt a sémába.
+
+## D-044 – A meccslista egy `ScrollView`, két szekcióval, virtualizálás nélkül
+**Dátum:** 2026-09-02
+**Döntés:** A képernyő az összes sort egyszerre rendereli egy `ScrollView`-ban,
+a közelgő találkozók felül, a lejátszott meccsek alul. Nincs `FlatList` és
+nincs `SectionList`.
+**Miért:** Egy szezon egy csapatra 30–45 meccs plusz néhány fixture, azaz
+legfeljebb ~50 egyszerű sor (Pressable + 3 Text) – ez nagyságrendekkel a
+virtualizálás haszonküszöbe alatt van, cserébe a `SectionList` a fejlécet
+(`AppHeader` + cím) `ListHeaderComponent`-be, a szekciókat pedig egy
+lapított adatszerkezetbe kényszerítené. A Ma képernyő is `ScrollView`-t
+használ, így a két lista ugyanúgy viselkedik. A közelgők azért állnak elöl,
+mert a stáb tipikusan a következő meccsre keres rá; a lejátszottak a hook
+sorrendjét tartják (dátum szerint csökkenő).
+**Alternatíva:** `SectionList` – natív szekciófejléc és virtualizálás, de több
+kód és két adatszerkezet ugyanezért a képért. Vagy szűrőchipek
+(Lejátszott / Közelgő váltás) – a mockup-készletben nincs rá minta, és a
+teljes menetrend egyben áttekinthetőbb.
+**Következmény:** Ha egy szezon meccsszáma jelentősen megnő (több csapat
+összevont nézete, több éves lista), a képernyő `SectionList`-re váltandó.
+**Visszavonható?** Igen, egy fájl.
+
+## D-045 – A meccssor vezérjele a hazai/vendég jelzés, a fordulószám kimarad
+**Dátum:** 2026-09-02
+**Döntés:** A `StackedRow` bal oldali körében `H` / `V` áll (hazai/vendég), és
+a fordulószám (`games.round`) sehol nem jelenik meg a listában. Az alcím a
+dátum + az eredmény szava (`2026. május 25. · Nyert`).
+**Miért:** A soron három információnak van helye a cím alatt, és 390pt-os
+kijelzőn a felirat-sáv ~200pt: a dátum, a forduló és az eredmény együtt
+kifutna, a `numberOfLines={1}` pedig pont a végét vágná le. A hazai/vendég
+elemzési szempontból is releváns (hazai pálya előny), a forduló viszont egy
+dátum szerint rendezett listában redundáns, ráadásul a mezőnk nullázható
+(`round: number | null`), tehát a köröknek fele üresen maradhatna – az pedig
+elrontaná a sorok igazítását. Az eredmény azért van szóban is kiírva, mert a
+számoszlop színe (zöld/piros) önmagában nem hordozhatja az információt.
+**Alternatíva:** Fordulószám a körben és a hazai/vendég a Badge-ben (a
+`StackedRow` nem tud badge-et fogadni), vagy a forduló az alcím végén
+(levágódna).
+**Visszavonható?** Igen, néhány sor a `GameRow`-ban.
