@@ -71,7 +71,7 @@
 
 ## S6 – Képernyők (prioritási sorrendben)
 
-- [ ] **Ma** (`app/(tabs)/index.tsx`) – következő/legutóbbi meccs kártya, csapat KPI-ok StatTile-okban, gyors belépési pontok. Mockup: `Ma Screen`
+- [x] **Ma** (`app/(tabs)/index.tsx`) – következő/legutóbbi meccs kártya, csapat KPI-ok StatTile-okban, gyors belépési pontok. Mockup: `Ma Screen`
 - [ ] **Meccsek – lista** (`app/(tabs)/games/index.tsx`) – lejátszott meccsek + közelgő fixtures, StackedRow-val
 - [ ] **Meccs részletei** (`app/(tabs)/games/[id].tsx`) – eredmény, negyedek, box score StatMatrix-ben, mentett pregame/postgame riport `GlowCard accent="ai"`-ban
 - [ ] **Játékosok – lista** (`app/(tabs)/players/index.tsx`) – szezon-aggregált lista, rendezés, névkeresés. Mockup: `Jatekosok Lista`
@@ -129,6 +129,85 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-02 – Ma képernyő és tab váz
+
+**Mit:** Elkészült az S6 első képernyője, és vele az app navigációs váza.
+
+*Tab váz.* `app/(tabs)/` öt route-tal: `index` (Ma), `players`, `games`,
+`standings`, `analysis`. A három bővülő tab (`players`, `games`, `analysis`)
+saját `Stack` layoutot kapott, hogy a későbbi részletképernyők (`games/[id]`)
+ne külön tabként jelenjenek meg. A Ma kivételével mind `PlaceholderScreen`-t
+mutat („Hamarosan"), a végleges fejléccel és címmel – a tabsáv és a szűrő így
+már öt tabbal próbálható. Az ideiglenes `@core` füstteszt képernyő
+(`app/index.tsx`) törölve; a füstteszt feladata már korábban lezárult, és a
+`/` most a Ma tabra mutat.
+
+*Tabsáv.* Saját `components/TabBar.tsx` a mockup szerint: 63pt tartalom +
+`insets.bottom`, surface1 háttér, subtle felső vonal, 24pt lucide ikonok, DM
+Sans 11pt felirat, az aktív tab tetején 24×3pt cián sáv. A beépített tabsáv
+ezt a felső jelzést nem tudja kiadni (D-042).
+
+*Ma képernyő.* `app/(tabs)/index.tsx` – fejléc, „MA" cím, majd négy blokk:
+következő meccs kártya (`NextGameCard`), 2×2-es KPI rács (`StatTile`),
+forma-sáv (`FormStrip`) és a legutóbbi meccs kártyája (`LastGameCard`). Az
+adat a `useTodayData`-ból jön, ami a meglévő `useGameData` + `usePlayerData`
+párost fogja össze – plusz hálózati kör nélkül (D-040). Első betöltéskor a
+végleges elrendezés `SkeletonBlock` helyőrzői látszanak, hiba esetén
+`ErrorPanel`, üres szűrőtalálatra `EmptyState`.
+
+*Fejléc és beállítások.* `components/AppHeader.tsx` – app jel, szűrő-chip,
+fogaskerék. A fogaskerék a mockupban tartalom nélkül szerepelt; most egy
+beállítás sheetet nyit (bejelentkezett email, verzió, kijelentkezés), ez lett
+a kijelentkezés végleges helye (D-041). Ehhez a `FilterSheet` lapváza kikerült
+a közös `components/BottomSheet.tsx`-be – a mozgás, a záró gesztus és az
+Android back kezelése egy helyen él, a `FilterSheet` viselkedése változatlan.
+
+*Formázás.* Új `lib/format.ts`: magyar dátum (`2026. szeptember 6. · szombat`),
+tizedes szám és napkülönbség. A hónap- és napnevek kézzel felsoroltak, nem
+`Intl`-ből jönnek (D-039).
+
+**Eltérések a mockuptól** (mind adathiány vagy korábbi döntés miatt):
+
+- A következő meccs kártyáról lemarad a **kezdési időpont és a helyszín** – a
+  sémában (élesben ellenőrizve) egyik sincs (D-022). A visszaszámláló ezért
+  nap pontosságú: `7 NAP` / `HOLNAP` / `MA` (D-043).
+- A **KPI trendjelzők** (▲ 3.1) kimaradnak mind a négy csempéről: két
+  mutatóhoz nincs olcsó meccsenkénti adat, a felemás megoldást elvetettük
+  (D-040).
+- A `▾` és a `›` karaktert lucide ikon váltja (D-031 mintájára): a csomagolt
+  DM Sans subsetben nincsenek meg, Androidon tofuként jelennének meg.
+- A visszaszámláló 0.02em betűköze elmaradt, mert ehhez új `tracking` token
+  kellene (20pt-on ez 0.4pt eltérés).
+
+**Fájlok:** `app/(tabs)/_layout.tsx`, `app/(tabs)/index.tsx`,
+`app/(tabs)/standings.tsx`, `app/(tabs)/players/{_layout,index}.tsx`,
+`app/(tabs)/games/{_layout,index,[id]}.tsx`,
+`app/(tabs)/analysis/{_layout,index}.tsx` (mind új), `app/index.tsx` (törölve),
+`components/{TabBar,AppHeader,BottomSheet,SettingsSheet,NextGameCard,FormStrip,LastGameCard,PlaceholderScreen}.tsx`
+(új), `components/FilterSheet.tsx` (a közös vázra állt át),
+`hooks/useTodayData.ts` (új), `lib/format.ts` (új)
+
+**Tesztelve:** `npm run typecheck` és `npm run lint` hibátlan (a typed routes
+újragenerálásához egyszer el kellett indítani a dev szervert). `npx expo
+export` iOS-re és Androidra lefut; **mindkét** Hermes bundle tartalmazza a
+képernyő összes feliratát (az ékezeteseket UTF-16-ban keresve): „Következő
+meccs", „Legutóbb", „Beállítások", „Kijelentkezés", „Pontátlag", „Lepattanó",
+„Forma · Utolsó", „Részletek", a magyar hónapneveket és a visszaszámláló
+szövegeit, valamint mind az öt tabfeliratot.
+
+**Nyitva maradt:** **Eszközön még nem futott** – ez a legnagyobb nyitott tétel:
+a tabsáv magassága, a KPI rács kétoszlopos törése, a hosszú ellenfélnevek
+tördelése és a beállítás sheet csak valós kijelzőn ítélhető meg. A
+„Részletek" a `games/[id]` helyőrzőre visz, amíg a meccs részletei képernyő el
+nem készül. A `PlaceholderScreen` négy tabon él, ezeket a saját feladatuk
+váltja le. A tabsáv „véglegesítése" (a feladatlista utolsó S6 sora) szándékosan
+nincs kipipálva: az aktív állapot finomhangolása és az eszközös ellenőrzés
+akkor jön, amikor mind az öt képernyő megvan.
+
+**Commit:** `feat: Ma képernyő és tab váz`
+
+---
 
 ## 2026-09-02 – Tap target audit
 
@@ -1658,3 +1737,89 @@ csak eszközön, „néha nem reagál" formában.
 viszont a mockup sűrű sorait (48pt-os sheet sorok, 32pt-os chip) felnyomná,
 ezért maradt az esetenkénti döntés.
 **Visszavonható?** Igen, elemenként néhány stílusmező.
+
+---
+
+## D-039 – A dátumformázás nem `Intl`-ből jön
+**Dátum:** 2026-09-02
+**Döntés:** A `lib/format.ts` kézzel felsorolt magyar hónap- és napneveket
+használ, nem `toLocaleDateString('hu-HU')`-t. A tizedes elválasztó **pont**
+(`82.4`), nem vessző.
+**Miért:** A Hermes `Intl` támogatása platformonként eltér – Androidon a
+rendszer ICU-jára delegál (gyártónként más adatokkal), iOS-en részleges saját
+implementáció. Ugyanaz a hívás így két különböző szöveget adhatna a két
+platformon, ráadásul régi Android eszközön néma tartalékra eshetne. Tizenkét
+hónapnév és hét napnév kézzel felsorolva determinisztikus és nulla
+futásidejű költség. A tizedes pont a mockup írásmódja (`82.4`, `76.8`), és a
+`CLAUDE.md` szerint a mockup a mérvadó.
+**Alternatíva:** `Intl` + `expo-localization` (plusz csomag, platformfüggő
+kimenet), vagy magyar szokás szerinti tizedes vessző (a mockuptól eltérne, és
+a JetBrains Mono tabuláris számjegyeivel a pont igazodik szebben).
+**Visszavonható?** Igen, egyetlen modul.
+
+## D-040 – A Ma képernyő KPI-jai és a hiányzó trendjelzők
+**Dátum:** 2026-09-02
+**Döntés:** A pont- és kapottpont-átlag a `games` tábláról jön (D-021), a
+lepattanó- és eldobottlabda-átlag a `usePlayerData` már cache-elt
+szezonsoraiból: a játékosonkénti összegek összeadva, a **csapat lejátszott
+meccseivel** osztva. A mockup négy változásjelzője (▲ 3.1) v1-ben **egyik
+csempén sem** jelenik meg.
+**Miért:** A négy KPI-hoz így nem kell egyetlen új lekérdezés sem – a
+`player_season_stats_by_season` ~15 sorát a Játékosok tab úgyis kéri, a
+modulszintű cache-ből mindkét képernyő ugyanazt kapja. A trendhez viszont
+meccsenkénti bontás kellene: a pontokhoz megvan a `games` tábla, a
+lepattanóhoz és az eldobott labdához viszont a több száz soros
+`player_game_stats_<szezon>` – ezt a belépés utáni első képernyőn nem akarjuk
+lefuttatni. Két csempén jelző, kettőn semmi: a 2×2 rács aszimmetrikus lenne,
+és a hiányzó jelző „nincs változás"-nak látszana. Ezért egyik sem kap jelzőt,
+amíg mind a négyhez nincs adat.
+**Alternatíva:** Csak a két pont-csempén trend (felemás rács), vagy a
+meccsenkénti box score betöltése a Ma képernyőn (a legdrágább kérés a
+legrosszabb helyen). Mindkettőt a megrendelővel egyeztetve vetettük el.
+**Visszavonható?** Igen: a `StatTile` `trend` propja megvan és opcionális.
+
+## D-041 – A kijelentkezés helye a beállítás sheet
+**Dátum:** 2026-09-02
+**Döntés:** A mockup fejlécének fogaskereke egy bottom sheetet nyit
+(bejelentkezett email, app verzió, kijelentkezés gomb). Ehhez a `FilterSheet`
+lapváza kikerült a közös `components/BottomSheet.tsx`-be.
+**Miért:** A mockup az ikont tartalom nélkül mutatja, a kijelentkezés viszont
+kell valahová – eddig az ideiglenes füstteszt képernyőn ült, ami most törlődött.
+Beállítás képernyő nincs a scope-ban, egy sheet viszont nem új navigációs
+szint. A közvetlen (megerősítéssel kijelentkeztető) fogaskerék félrevezető
+lenne: az ikon nem ezt ígéri. A vázat azért emeltük ki, mert a második sheetnél
+a mozgás, a záró gesztus és az Android back kezelése már ismétlés lett volna –
+a `FilterSheet` viselkedése nem változott.
+**Alternatíva:** Fogaskerék nélküli fejléc (nem lehetne kijelentkezni), vagy
+teljes beállítás képernyő hatodik route-ként (a scope-on kívül).
+**Visszavonható?** Igen, a sheet egy fájl.
+
+## D-042 – Saját tabsáv, nem a navigátor alapértelmezettje
+**Dátum:** 2026-09-02
+**Döntés:** A `Tabs` a `tabBar` propon keresztül a saját
+`components/TabBar.tsx`-ünket kapja.
+**Miért:** A mockupban az aktív tabot egy 24×3pt-os cián sáv jelzi a tabelem
+**tetején**, a felső vonalra ültetve. A beépített tabsáv csak ikont és
+feliratot rendez el; a jelzést az ikon dobozába kellene abszolút pozícióval
+becsempészni, ami a belső elrendezés apró változásaira is elcsúszna. A saját
+sáv ~90 sor, és a magasságot (63pt + `insets.bottom`) is pontosan a mockup
+szerint adja.
+**Alternatíva:** `tabBarIcon` + abszolút pozíciós jelző (törékeny), vagy a
+mockup jelzésének elhagyása (az aktív tab csak színnel különbözne).
+**Visszavonható?** Igen, a `tabBar` prop elhagyásával.
+
+## D-043 – Nap pontosságú visszaszámláló
+**Dátum:** 2026-09-02
+**Döntés:** A következő meccs kártya visszaszámlálója `7 NAP` / `HOLNAP` /
+`MA` alakú, a mockup „7 NAP 04:12" helyett. A helyszín („Paks, Városi
+Sportcsarnok") sem jelenik meg.
+**Miért:** A `league_fixtures` sem kezdési időt, sem helyszínt nem tárol (a
+sémát élesben ellenőriztük: `game_date` `date` típus, helyszín oszlop nincs) –
+ez a D-022 folyománya. Órát és percet mutatni éjfélig visszaszámolva
+pontosnak látszó, valójában kitalált adat lenne; a stáb pont azt tudja a
+legjobban, mikor kezd a csapat. A „MA" és a „HOLNAP" külön eset, mert `0 NAP`
+és `1 NAP` magyarul rosszul hangzik.
+**Alternatíva:** Óra-perc pontos visszaszámlálás éjfélre (hamis pontosság),
+vagy a visszaszámláló teljes elhagyása (a mockup egyik hangsúlyos eleme
+tűnne el).
+**Visszavonható?** Igen, ha a webprojekt felveszi a kezdési időt a sémába.
