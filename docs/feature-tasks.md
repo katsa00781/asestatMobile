@@ -83,7 +83,7 @@
 - [x] **Elemzés – Ellenfél scouting** (`app/(tabs)/analysis/scouting.tsx`) – a következő ellenfél erősségei és gyengéi (`@core/pregame-scouting`)
 - [x] **Elemzés – Szerepkör-elemzés** – ki mit tesz hozzá a csapatjátékhoz (`@core/team-analysis`)
 - [x] Clutch bontás a **Meccs részletein** (`@core/kosarstat-clutch-parse`) – szezonszintű clutch nézet nincs (D-069)
-- [ ] Tab layout véglegesítése: 5 tab ikonokkal, aktív állapot cián glow-val, safe area alul
+- [x] Tab layout véglegesítése: 5 tab ikonokkal, aktív állapot cián glow-val, safe area alul (az Elemzés tab lila – D-091, D-092)
 
 ---
 
@@ -134,6 +134,51 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-03 – Tab layout véglegesítése
+
+**Mit:** Lezárult az S6 utolsó nyitott sora: a `TabBar` aktív állapota
+véglegesítve. Két dolog került bele, a többi (5 tab ikonokkal, `insets.bottom`
+alapú safe area) már állt.
+
+*Glow az aktív ikon alatt (D-091).* A mockup indikátora sík 3pt-os sáv, glow
+nélkül – a feladatlista viszont „aktív állapot cián glow-val" sort kér. Az
+aktív ikon mögé most egy 56×32pt-os réteg kerül: `glow[tone].fill` háttér és
+`glow[tone].border` 1pt keret (D-005 szerint, nem `shadowColor`). A keret
+fókusz nélkül is 1pt, csak átlátszó, hogy az ikon ne ugorjon fókuszváltáskor.
+
+*Az Elemzés tab lila (D-092).* A P12 prompt kimondja: az aktív „Elemzés" tab
+az egyetlen, ami AI-tónust kap – az ikon, a felirat és a felső indikátorcsík
+is lila. A szín a `text.ai` (#C4B5FD) lavender, nem az `accent.ai` (#7C3AED),
+mert utóbbi ekkora ikonon a sötét sávban alig látszana. A másik négy tab cián
+(`accent.cyan`) marad. Az útvonalnév→hangnem a `TAB_TONE` táblában.
+
+*Nyomás-visszajelzés.* A tabelem eddig `Pressable` volt visszajelzés nélkül;
+most a `usePressed` hookkal a nem aktív tab lenyomva 0.6 opacitásra vált
+(a `CLAUDE.md` „minden hover → pressed" szabálya). A `map` callbackből ezért
+külön `TabItem` komponens lett (hook nem lehet ciklusban).
+
+**Fájlok:** `components/TabBar.tsx` (átírva: `TabItem` komponens, tónus-tábla,
+glow réteg, pressed opacitás), `app/(tabs)/_layout.tsx` (fejléckomment)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan (mindkettő EXIT 0).
+`npx expo export` iOS-re és Androidra lefut; mindkét Hermes bundle tartalmazza
+a tab feliratokat („Elemzés", „Tabella", „Meccsek", „Játékosok"). A
+`ma-screen.html` mockup alsó sávjával összevetve az elrendezés (63pt tartalom
++ inset, 24pt ikon, DM Sans 11pt felirat, 24×3pt indikátor) egyezik.
+
+**Nyitva maradt:** **Eszközön még nem futott.** Valós kijelzőn kell megítélni:
+(1) az 56×32pt-os glow réteg mérete öt tab mellett 390pt alatt – nem lóg-e
+össze a szomszéddal; (2) a lila `text.ai` ikon kontrasztja a `surface1`
+sávon; (3) a pressed 0.6 opacitás érzete gyors koppintásnál. Ezzel az S6
+összes sora kész; a következő blokk az S7 (chartok), aminek első sora a
+`victory-native` + `@shopify/react-native-skia` telepítése – **engedélyt
+igényel** (a `CLAUDE.md` szerint minden új csomagra rá kell kérdezni), bár a
+tech stack listában szerepelnek.
+
+**Commit:** `feat: tab layout véglegesítése – Elemzés tab lila, aktív glow`
+
+---
 
 ## 2026-09-02 – Clutch-bontás a Meccs részletein
 
@@ -3529,3 +3574,38 @@ miatt sablon (D-076 mintája).
 kiszámíthatatlanul változna meccsről meccsre), vagy AI-összegzés (a mobil app
 nem generál tartalmat).
 **Visszavonható?** Igen, a `[id].tsx`-ben a szekció feltételessé tételével.
+
+## D-091 – Az aktív tab ikonja glow réteget kap, a mockup sík indikátorán túl
+**Dátum:** 2026-09-03
+**Döntés:** A `ma-screen.html` mockup aktív tabja csak egy sík 24×3pt-os accent
+sávot mutat a tabelem tetején. A `TabBar` ezen felül az aktív ikon mögé egy
+56×32pt-os glow réteget is tesz: `glow[tone].fill` háttér és `glow[tone].border`
+1pt keret.
+**Miért:** A feladatlista S6 sora kifejezetten „aktív állapot cián glow-val"-t
+kér, a mockup indikátora viszont glow nélküli. A réteg a `constants/theme`
+`glow` tokenjeiből épül (D-005: accent keret + alacsony opacitású kitöltés, nem
+`shadowColor`), tehát nem vezet be új tokent. A keret fókusz nélkül is 1pt,
+csak `transparent` – így az ikon geometriája nem ugrik fókuszváltáskor.
+**Alternatíva:** (a) csak a sík indikátorsáv, a feladatlista szövegével
+szemben; (b) Skia `BlurMask` valódi elmosott glow-ért – túl nehéz egy
+tabsávhoz, és a `CLAUDE.md` szerint is csak „kiemelt elemeken".
+**Visszavonható?** Igen, a `TabItem` `iconWrap` fókuszos ágának törlésével.
+
+## D-092 – Az Elemzés tab aktív hangneme lila, `text.ai` színnel
+**Dátum:** 2026-09-03
+**Döntés:** Az öt tab közül négy aktív állapota cián (`accent.cyan`, #00D4FF),
+az **Elemzés** tabé lila: az ikon, a felirat és a felső indikátorcsík is a
+`text.ai` (#C4B5FD) lavender. A glow réteg az `ai` hangnemben a `glow.ai`
+(#7C3AED-alapú) áttetsző kitöltést kapja. Az útvonalnév→hangnem a `TAB_TONE`
+tábla.
+**Miért:** A P12 prompt (`asestats/context/mobile/mobile-design-prompts.md`,
+„TAB BAR" pont) kimondja: „az aktív »Elemzés« tab ikonja és címkéje LILA
+(#C4B5FD), nem cián – ez az egyetlen tab, ami AI tónust kap. A felső indikátor
+csík is lila." Az `accent.ai` (#7C3AED) egy 24pt-os vonalas ikonon a
+`surface1` sávban túl sötét lenne – a `text.ai` pont erre a célra létező,
+sötét háttéren olvasható lila (lásd a token kommentjét és a P12 badge-eket).
+**Alternatíva:** (a) minden tab cián, a prompttal szemben; (b) az indikátor és
+az ikon `accent.ai`-val – kontrasztvesztés a sötét sávon.
+**Következmény:** A `TabBar` már nem az `accentColor` táblából olvas (az az
+`accent.ai` sötét lilát adná), hanem saját `TONE_FOREGROUND` leképezésből.
+**Visszavonható?** Igen, a `TAB_TONE` kiürítésével minden tab ciánra áll vissza.

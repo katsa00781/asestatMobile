@@ -1,9 +1,10 @@
 /**
  * Tab layout – az app öt fő képernyője.
  *
- * A tabsávot a `TabBar` rajzolja (mockup szerinti cián aktív jelzéssel), ezért
- * itt csak a képernyők sorrendje és a feliratuk van. A fejléc képernyőnként
- * saját (`AppHeader`), navigátor-fejléc nincs.
+ * A tabsávot a `TabBar` rajzolja (aktív tab: accent jelzés + glow, az Elemzés
+ * tab lilával – D-091, D-092), ezért itt csak a képernyők sorrendje és a
+ * feliratuk van. A fejléc képernyőnként saját (`AppHeader`), navigátor-fejléc
+ * nincs.
  */
 import { Tabs } from 'expo-router/js-tabs';
 
