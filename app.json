@@ -9,7 +9,10 @@
     "ios": {
       "supportsTablet": true,
       "requireFullScreen": true,
-      "bundleIdentifier": "hu.ase.asestats"
+      "bundleIdentifier": "hu.ase.asestats",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -46,6 +49,18 @@
     "backgroundColor": "#050B14",
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "285f7cf5-4ab3-4059-af93-6447631d9975"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/285f7cf5-4ab3-4059-af93-6447631d9975"
     }
   }
 }
