@@ -92,7 +92,7 @@
 - [x] `victory-native` + `@shopify/react-native-skia` telepítése és Metro/babel konfig
 - [x] Játékos trend chart (pont / valuation idősor)
 - [x] Kumulatív pontkülönbség (momentum) chart a meccs részletein
-- [ ] Four Factors oszlopdiagram
+- [x] Four Factors oszlopdiagram
 - [x] Chart téma modul a `constants/theme.ts` tokenjeiből (a webes `lib/chart-theme.ts` mintájára)
 - [ ] Chart teljesítmény-ellenőrzés valós Android eszközön (Skia a leggyengébb pont)
 
@@ -134,6 +134,69 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-03 – Four Factors oszlopdiagram a meccs részletein (S7)
+
+**Mit:** Lezárult egy újabb S7-sor: a Meccs részletei képernyőn a „Momentum" és
+a „Box score" közé bekerült egy „Four factors" szekció, ami a négy tényezőt
+(eFG%, TOV%, ORB%, FT%) a saját csapat és az ellenfél összevetésében mutatja
+csoportosított oszlopdiagramon. A webes „Four Factors Összevetés" kártya mobil
+párja.
+
+*Adat.* A `useGameDetails` egy ötödik ágat is futtat (`fetchFourFactors`): a
+`kosarstat_game_team_metrics` sorait `kosarstat_game_id` + `season_id` szűréssel
+(csapatoldalanként egy sor, lapozás nélkül). A `toFourFactors` a saját és az
+ellenfél sorát a `home_away` alapján párosítja, és négy `FourFactorRow`-t ad
+(`our` / `opp` százalékban, plusz `lowerIsBetter` a TOV%-hoz). A payload új
+mezője: `fourFactors: FourFactorRow[]`. Ha nincs `kosarstatGameId` vagy
+metrikasor, a tömb üres marad.
+
+*A büntetőráta skálája (D-096).* Az eFG%, TOV% és ORB% eleve 0–100 skálán
+érkezik, a `ftm_rate` (FTM/FGA) viszont 0–1 arányként – ×100-zal
+százalékponttá váltjuk, hogy a chart közös Y tengelyén a másik hárommal
+összemérhető legyen. A webes chart ezt nem teszi meg, ott a FT Rate oszlop egy
+alig látszó csík.
+
+*Chart.* Új komponens: `components/GameFourFactorsChart.tsx` – `CartesianChart`
++ `BarGroup` (két `BarGroup.Bar`, 300 ms timing), `GlowCard`-ban, a
+`GameMomentumChart` mintájára. A saját csapat oszlopa cián (mint a momentumon),
+az ellenfélé tompa kék (`chartSeries.neutral`, az új token a `border.strong`-ból
+– a webes `CHART_COLORS.muted` párja). Az oszlopok tetején az érték Skia
+`Text`-tel: a `BarGroup` `onBarSizeChange`-ből kapott geometriával a
+`getBarGroupOffset` képletét lekövetve igazítjuk középre. Alatta két elemű
+jelmagyarázat (mi / ellenfél). Az Y domain 0-tól a max érték 1.18-szorosáig,
+ötös rácsra kerekítve. Metrikasor híján magyarázó sor a chart helyett (D-047).
+
+**Fájlok:** `types/games.ts` (`FourFactorRow`), `hooks/useGameDetails.ts`
+(`fetchFourFactors`, `toFourFactors`, `toFactorRow`, `fourFactors` a
+payloadban), `constants/chart-theme.ts` (`chartSeries.neutral`),
+`components/GameFourFactorsChart.tsx` (új), `app/(tabs)/games/[id].tsx`
+(„Four factors" szekció a „Momentum" után)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan (EXIT 0). A teljes
+lánc (lekérdezés → `toFourFactors`) élesben, a kliens anon kulcsával, az ASE
+**mind a 25 kosarstat-meccsére 2025/2026-ban**: mindegyikhez van metrikasor,
+mindkét oldal feloldódik, sehol nem-véges érték. A ×100-as FT% reális
+tartományban marad (7–40), a másik három 10–80 közt – a közös Y tengely (maxY
+55–95) mind a négyet olvashatóan tartja. A korábbi szezonokban az ASE-nek
+nincs kosarstat-meccse, ott a magyarázó sor fut. `npx expo export` iOS-re és
+Androidra is lefut (8.1 / 8.3 MB Hermes bundle); mindkettő tartalmazza a
+`kosarstat_game_team_metrics` lekérdezést, az `eFG%` feliratot és a „Four
+factors" szekciócímet.
+
+**Nyitva maradt:** **Eszközön még nem futott** – valós kijelzőn kell megnézni:
+(1) a `BarGroup` nyolc oszlopa (4 kategória × 2) 390pt alatt elfér-e a
+44pt-os `domainPadding`-gal, összecsúszás nélkül; (2) a Skia értékfeliratok
+középre igazítása – az `onBarSizeChange` az első képkockán még 0-t ad, tehát
+a feliratok egy pillanatra rossz helyen lehetnek, mielőtt a helyükre ugranak;
+(3) a `neutral` (border.strong, #3A5478) oszlopszín kontrasztja a `surface1`
+kártyán; (4) a hosszú ellenfélnevek a jelmagyarázatban (`numberOfLines={1}` +
+`flexShrink`). Hátralévő S7-sorok: chart-teljesítmény valós Android eszközön.
+A press-tooltip (D-094) továbbra is nyitva.
+
+**Commit:** `feat: Four Factors oszlopdiagram a meccs részletein`
+
+---
 
 ## 2026-09-03 – Momentum chart a meccs részletein (S7)
 
@@ -3790,3 +3853,30 @@ token).
 kiolvasni; (b) alapvonal nélkül – az előjelváltás nem látszik ránézésre.
 **Visszavonható?** Igen; ha később lesz esemény-szintű adat, a chart bemenete
 egy sűrűbb `MomentumPoint[]`-tá bővül, a komponens változatlanul rajzolja.
+
+---
+
+## D-096 – A Four Factors chart a büntetőrátát százalékpontra váltja
+**Dátum:** 2026-09-03
+**Döntés:** A meccs részletein a Four Factors oszlopdiagram négy tényezője közül
+az eFG%, TOV% és ORB% a kosarstat 0–100 skálájú értékén marad, a büntetőráta
+(`ftm_rate`, FTM/FGA, 0–1 arány) viszont ×100-zal százalékpontra vált, és a
+tengelyfelirata `FT%`. Az átváltás a `useGameDetails` `toFourFactors`-ában
+történik, a chart csak rajzol. Az ellenfél oszlopa új `chartSeries.neutral`
+színt kap (a `border.strong` tokenből).
+**Miért:** A négy oszlop egy közös Y tengelyen áll. A nyers `ftm_rate` ~0.15–0.35,
+a másik három 10–80 – így a FT oszlop egy alig látszó csík lenne (a webes
+`GamePbpCharts` pontosan ezt a hibát mutatja: `0.24%`-ként címkézi). A ×100
+ugyanabba a nagyságrendbe hozza (7–40 az ASE 25 meccsén mérve), az arány és a
+két csapat viszonya változatlan. Külön tengelyt egyetlen oszlopért nem éri meg
+behozni. A `neutral` szín nem új design token, csak új chart-szerep egy
+meglévő tokenre (mint a `chartZeroLine` a D-095-ben), és a webes
+`CHART_COLORS.muted` (#2D4A6B) szándékát követi.
+**Alternatíva:** (a) nyers `ftm_rate` közös tengelyen – olvashatatlan; (b)
+másodlagos Y tengely a FT-nek – a `victory-native` XL támogatja, de négy
+kategóriás csoportos oszlopnál zavaró és túl sok; (c) a FT tényező elhagyása –
+a „four factors" háromra csökkenne.
+**Következmény:** A chart FT oszlopa nem a nyers rátát mutatja; aki a 0.24-es
+alakot keresi, a jövőbeli press-tooltipben (D-094) vagy a box score-ból
+számolva találja meg. A `FourFactorRow.our` / `.opp` mindig százalék.
+**Visszavonható?** Igen, a `toFourFactors` `factor` szorzója és az X felirat.

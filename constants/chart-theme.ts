@@ -16,6 +16,12 @@ export const chartSeries = {
   negative: colors.semantic.negative,
   ai: colors.accent.ai,
   warning: colors.semantic.warning,
+  /**
+   * Összevetős chartokon a „másik" oszlop (pl. az ellenfél a Four Factors
+   * diagramon) – az erős vonaltokenből, hogy jelen legyen, de ne versenyezzen
+   * a kiemelt cián adatsorral. A webes `CHART_COLORS.muted` megfelelője.
+   */
+  neutral: colors.border.strong,
 } as const;
 
 export type ChartSeriesTone = keyof typeof chartSeries;

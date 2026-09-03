@@ -102,6 +102,27 @@ export interface MomentumPoint {
   diff: number;
 }
 
+/**
+ * A meccs egy „four factor" mutatója a saját csapat és az ellenfél
+ * összevetésében. Az adat a kosarstat `kosarstat_game_team_metrics` sorából
+ * jön – a meccsek nagy részéhez hiányzik.
+ *
+ * Az `our` és `opp` **százalékban** áll: az eFG%, TOV% és ORB% eleve úgy
+ * érkezik, a büntetőráta (FTM/FGA, 0–1 skála) viszont ×100-zal ide van váltva,
+ * hogy a chart közös Y tengelyén a másik hárommal összemérhető legyen (D-096).
+ */
+export interface FourFactorRow {
+  key: 'efg' | 'tov' | 'orb' | 'ft';
+  /** Rövid felirat a chart X tengelyére (`eFG%` / `TOV%` / `ORB%` / `FT%`). */
+  label: string;
+  /** A saját csapat értéke százalékban. */
+  our: number;
+  /** Az ellenfél értéke százalékban. */
+  opp: number;
+  /** Igaz, ha a kisebb érték a jobb (labdaeladás %). */
+  lowerIsBetter: boolean;
+}
+
 export type GameReportType = 'pregame' | 'postgame' | 'combined' | 'manual';
 
 /** Mentett AI riport a `game_text_reports` táblából – az app csak olvassa. */

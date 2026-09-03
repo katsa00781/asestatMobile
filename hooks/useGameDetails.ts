@@ -20,6 +20,7 @@ import { useGameData } from '@/hooks/useGameData';
 import { createQueryCache } from '@/lib/query-cache';
 import { supabase } from '@/lib/supabase';
 import type {
+  FourFactorRow,
   GameReport,
   GameReportType,
   HomeAway,
@@ -34,6 +35,8 @@ interface GameDetailsPayload {
   quarters: QuarterScore[];
   /** Negyedenkénti kumulatív pontkülönbség a momentum charthoz. */
   momentum: MomentumPoint[];
+  /** A négy tényező a saját csapat és az ellenfél összevetésében, vagy üres. */
+  fourFactors: FourFactorRow[];
   reports: GameReport[];
   /** A hajrá-bontás a kosarstat nyers tábláiból, vagy `null`, ha nincs. */
   clutch: KosarstatGameClutch | null;
@@ -51,6 +54,7 @@ const EMPTY_PAYLOAD: GameDetailsPayload = {
   boxScore: [],
   quarters: [],
   momentum: [],
+  fourFactors: [],
   reports: [],
   clutch: null,
 };
@@ -101,7 +105,7 @@ async function fetchDetails(
 ): Promise<GameDetailsPayload> {
   const statsTable = getSeasonStatsTable(seasonName);
 
-  const [statsResult, reportsResult, quarterData, clutch] = await Promise.all([
+  const [statsResult, reportsResult, quarterData, clutch, fourFactors] = await Promise.all([
     supabase
       .from(statsTable)
       .select(
@@ -119,6 +123,7 @@ async function fetchDetails(
       .order('generated_at', { ascending: false }),
     fetchQuarters(game, seasonId),
     fetchClutch(game, seasonId, teamName),
+    fetchFourFactors(game, seasonId),
   ]);
 
   if (statsResult.error) throw new Error(statsResult.error.message);
@@ -128,9 +133,29 @@ async function fetchDetails(
     boxScore: toBoxScore(statsResult.data),
     quarters: quarterData.quarters,
     momentum: quarterData.momentum,
+    fourFactors,
     reports: toReports(reportsResult.data),
     clutch,
   };
+}
+
+/**
+ * A négy tényező (eFG%, labdaeladás %, támadólepattanó %, büntetőráta) a
+ * kosarstat `kosarstat_game_team_metrics` sorából – csapatoldalanként egy sor.
+ * Ha a meccshez nincs kosarstat-azonosító vagy metrikasor, üres tömb: a chart
+ * helyett magyarázó sor jelenik meg (D-047 mintája).
+ */
+async function fetchFourFactors(game: TeamGame, seasonId: string): Promise<FourFactorRow[]> {
+  if (!game.kosarstatGameId) return [];
+
+  const { data, error } = await supabase
+    .from('kosarstat_game_team_metrics')
+    .select('team_side, efg, tov_pct, orb_pct, ftm_rate')
+    .eq('kosarstat_game_id', game.kosarstatGameId)
+    .eq('season_id', seasonId);
+
+  if (error) throw new Error(error.message);
+  return toFourFactors(data, game.homeAway);
 }
 
 /**
@@ -384,6 +409,50 @@ function toMomentum(rows: unknown, homeAway: HomeAway): MomentumPoint[] {
       quarter,
       diff: (ourCumulative.get(quarter) ?? 0) - (oppCumulative.get(quarter) ?? 0),
     }));
+}
+
+/**
+ * A két csapatoldali metrikasorból építi a négy szembeállított tényezőt. A
+ * büntetőráta 0–1 skálán érkezik, ezért ×100-zal százalékponttá alakul, hogy a
+ * chart közös Y tengelyén a másik hárommal összemérhető legyen (D-096). Ha
+ * bármelyik oldal sora hiányzik, üres tömb.
+ */
+function toFourFactors(rows: unknown, homeAway: HomeAway): FourFactorRow[] {
+  if (!Array.isArray(rows)) return [];
+
+  const list = rows.filter(isRecord);
+  const our = list.find((row) => row.team_side === homeAway) ?? null;
+  const opp =
+    list.find(
+      (row) => row !== our && (row.team_side === 'home' || row.team_side === 'away'),
+    ) ?? null;
+
+  if (!our || !opp) return [];
+
+  return [
+    toFactorRow('efg', 'eFG%', our, opp, 'efg', 1, false),
+    toFactorRow('tov', 'TOV%', our, opp, 'tov_pct', 1, true),
+    toFactorRow('orb', 'ORB%', our, opp, 'orb_pct', 1, false),
+    toFactorRow('ft', 'FT%', our, opp, 'ftm_rate', 100, false),
+  ];
+}
+
+function toFactorRow(
+  key: FourFactorRow['key'],
+  label: string,
+  our: Record<string, unknown>,
+  opp: Record<string, unknown>,
+  column: string,
+  factor: number,
+  lowerIsBetter: boolean,
+): FourFactorRow {
+  return {
+    key,
+    label,
+    our: toNumber(our[column]) * factor,
+    opp: toNumber(opp[column]) * factor,
+    lowerIsBetter,
+  };
 }
 
 function toReports(rows: unknown): GameReport[] {
