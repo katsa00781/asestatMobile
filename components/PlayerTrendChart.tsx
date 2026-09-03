@@ -35,7 +35,9 @@ type Metric = 'points' | 'valuation';
 
 const SEGMENTS: { key: Metric; label: string; tone: ChartSeriesTone }[] = [
   { key: 'points', label: 'Pont', tone: 'cyan' },
-  { key: 'valuation', label: 'Értékelés', tone: 'orange' },
+  // A statisztikai értékelés (valuation) neve mindenhol VAL – a `PlayerGameLog`
+  // is így rövidíti, a webes chart is „VAL"-t ír.
+  { key: 'valuation', label: 'VAL', tone: 'orange' },
 ];
 
 /**

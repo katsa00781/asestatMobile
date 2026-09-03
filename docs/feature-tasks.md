@@ -163,7 +163,8 @@ mintájára).
 *Játékos trend chart.* Új komponens: `components/PlayerTrendChart.tsx`. A
 `usePlayerDetails` a meccseket dátum szerint csökkenőben adja, a chart
 időrendben nő – a komponens megfordítja. Felül `SegmentedControl` vált a két
-metrika közt (Pont – cián / Értékelés – narancs); a webes „Pontok
+metrika közt (Pont – cián / VAL – narancs, a valuation mindenhol így
+rövidül); a webes „Pontok
 meccsenként" és „Hatékonyság (VAL)" kártya egy vászonban. `CartesianChart` +
 `Line` (`monotoneX` görbe, 300 ms timing animáció) + `Scatter` a
 pontjelekhez, `GlowCard`-ban. X tengely: rövid dátum (`05.25`), Y: egész.
