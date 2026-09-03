@@ -135,6 +135,47 @@ Sablon:
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
 
+## 2026-09-03 – Production build indításkori crash: hiányzó Supabase env változók
+
+**Mit:** A javított lockfile-lal a felhő-build lefutott (`ffe827f6`, build 3),
+de az app **iOS eszközön indításkor azonnal elszállt**. Ez volt az első valódi
+eszközfutás (minden korábbi teszt szimulátor/dev volt).
+
+*Ok.* A `lib/supabase.ts` modul betöltéskor `throw`-ol, ha nincs
+`EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY`. Ezek a `.env`-ből
+jönnek, ami `.gitignore`-olt → az EAS buildbe nem kerül fel, és EAS
+környezeti változó sem volt beállítva (`eas env:list` mindhárom környezetre
+üres). A production bundle-ben így mindkét érték `undefined`, a `throw` a JS
+bundle betöltésekor lefut, az app fehér képernyő után kilép. Dev alatt azért
+működött, mert az Expo CLI helyben betölti a `.env`-et. A kódban csak ez a két
+`process.env` hivatkozás van, más env-függés nincs.
+
+*Javítás (D-100).* `eas env:create` mindkét változóra, `production` +
+`preview` + `development` környezetre, `plaintext` láthatósággal (az
+`EXPO_PUBLIC_` értékek build időben a bundle-be inline-olódnak, publikusak; az
+anon kulcsot RLS védi – `sensitive`/`secret` típussal az EAS nem engedné a
+kliensbundle-be). A `.env` nem került git-be, az `eas.json`-ba sem – a
+titok-kezelés az EAS-nél marad. A parancsokat a felhasználó futtatta (a `.env`
+értékeivel), én ellenőriztem a `eas env:list` kimenetét.
+
+**Fájlok:** nincs repo-változás (EAS-oldali projekt-konfiguráció). Ez a
+bejegyzés + D-100 a doksiban.
+
+**Tesztelve:** `eas env:list --environment production|preview|development`
+mindháromban ott a két változó, helyes URL-lel és anon kulccsal.
+**Az új build még nem futott** – a `ffe827f6` (build 3) hibás, azt nem szabad
+TestFlightra küldeni. Következő: `eas build -p ios --profile production` →
+`eas submit -p ios --latest`.
+
+**Nyitva maradt:** Az `EXPO_PUBLIC_*` env változó hiánya CI-ellenőrzés nélkül
+csendes – érdemes lehet a `lib/supabase.ts` hibaüzenetébe „EAS env" utalást
+tenni, vagy egy `eas.json` build-hook ellenőrzést. Egyelőre nem tettem.
+A D-099 lockfile-regressziós kockázat továbbra is él.
+
+**Commit:** `docs: production crash oka és megoldása – EAS env változók (D-100)`
+
+---
+
 ## 2026-09-03 – EAS iOS build javítása: lockfile újragenerálás npm 10-zel
 
 **Mit:** Az első `eas build --platform ios --profile production` az „Install
@@ -4124,3 +4165,26 @@ opcionális deps-et minden környezetben; (c) a hiányzó `@emnapi/*` sorok kéz
 beírása a lockba – törékeny, a következő `npm install` felülírja.
 **Visszavonható?** Igen. A lockfile bármikor újragenerálható; ha a
 verzió-drift visszatér, a `packageManager`-pin az elsődleges következő lépés.
+
+---
+
+## D-100 – A Supabase `EXPO_PUBLIC_*` változók EAS environment variable-ként, nem git-ben
+**Dátum:** 2026-09-03
+**Döntés:** Az `EXPO_PUBLIC_SUPABASE_URL` és `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+`eas env:create`-tel kerül az EAS projektbe (`production` + `preview` +
+`development` környezet, `plaintext` láthatóság). A `.env` marad `.gitignore`-olt,
+és az `eas.json` `build.*.env` blokkjába **sem** írjuk be őket.
+**Miért:** A `.env` nem kerül fel az EAS buildbe, ezért a production bundle-ből
+hiányoztak a változók, és a `lib/supabase.ts` betöltéskori `throw`-ja
+indításkor megölte az appot. Az EAS environment variable a hivatalos megoldás:
+build időben injektálódik, környezetenként külön kezelhető, és nem duplikálja a
+titok-forrást verziózott fájlba. A `plaintext` a helyes típus, mert az
+`EXPO_PUBLIC_` értékek amúgy is a kliensbundle-be inline-olódnak (az anon kulcs
+publikus, RLS védi az adatot); `sensitive`/`secret` típussal az EAS nem engedné
+build-be.
+**Alternatíva:** (a) `eas.json` `build.production.env` – működne, de az anon
+kulcs és az URL verziózott fájlba kerülne, szemben a `CLAUDE.md` „.env soha nem
+kerülhet git-be" elvével; (b) a `.env` felküldése `--include-dotenv`-vel /
+`.easignore` trükkel – törékeny, és a `.env` így is kikerülhetne a repóból.
+**Visszavonható?** Igen, `eas env:delete`. A változók a `.env`-ből bármikor
+újra létrehozhatók.
