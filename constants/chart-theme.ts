@@ -51,6 +51,12 @@ export const chartStroke = {
 } as const;
 
 /**
+ * A nulla-alapvonal színe az előjeles chartokon (momentum). Az erős
+ * vonaltokenből – látszik, de nem versenyez az adatgörbével.
+ */
+export const chartZeroLine = colors.border.strong;
+
+/**
  * Vászon-térközök. A `padding` a tengelyfeliratoknak hagy helyet, a
  * `domainPadding` a szélső adatpontokat tolja beljebb, hogy a vonal és a
  * pontok ne érjenek a kerethez.

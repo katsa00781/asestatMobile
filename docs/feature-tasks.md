@@ -91,7 +91,7 @@
 
 - [x] `victory-native` + `@shopify/react-native-skia` telepítése és Metro/babel konfig
 - [x] Játékos trend chart (pont / valuation idősor)
-- [ ] Kumulatív pontkülönbség (momentum) chart a meccs részletein
+- [x] Kumulatív pontkülönbség (momentum) chart a meccs részletein
 - [ ] Four Factors oszlopdiagram
 - [x] Chart téma modul a `constants/theme.ts` tokenjeiből (a webes `lib/chart-theme.ts` mintájára)
 - [ ] Chart teljesítmény-ellenőrzés valós Android eszközön (Skia a leggyengébb pont)
@@ -134,6 +134,56 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-03 – Momentum chart a meccs részletein (S7)
+
+**Mit:** Lezárult egy S7-sor: a Meccs részletei képernyőn a „Negyedek" és a
+„Box score" közé bekerült egy „Momentum" szekció, ami a kumulatív
+pontkülönbség alakulását mutatja negyedenként vonaldiagramon. A webes
+„Momentum (Kumulatív Pontkülönbség)" kártya mobil párja.
+
+*Adat.* A `useGameDetails` `fetchQuarters`-e mostantól a `cumulative_points`
+oszlopot is lekéri a `kosarstat_game_quarter_stats`-ból (egy lekérdezés, nem
+plusz kör), és ugyanabból a sorhalmazból egy `toMomentum` a saját–ellenfél
+kumulatív pontkülönbséget építi negyedenként. A payload új mezője:
+`momentum: MomentumPoint[]`. Ha bármelyik oldalon hiányzik a
+`cumulative_points`, a tömb üres marad.
+
+*Chart.* Új komponens: `components/GameMomentumChart.tsx` – `CartesianChart` +
+`Line` (`monotoneX`, 300 ms timing) + `Scatter`, `GlowCard`-ban, a
+`PlayerTrendChart` mintájára. X tengely: `N1`…`N4`; Y: előjeles egész
+(`+7` / `-3`). Egy második, konstans 0 adatsor rajzolja a halvány
+nulla-alapvonalat (`chartZeroLine`, a `border.strong` tokenből) – így az
+előjelváltás ránézésre látszik. Alatta felirat: „Pozitív: {mi} vezet ·
+Negatív: {ellenfél} vezet". Kettőnél kevesebb negyedadatnál magyarázó sor a
+chart helyett (D-047).
+
+**Fájlok:** `types/games.ts` (`MomentumPoint`), `hooks/useGameDetails.ts`
+(`cumulative_points` a selectben, `toMomentum`, `fetchQuarters` két struktúrát
+ad vissza, `momentum` a payloadban), `constants/chart-theme.ts`
+(`chartZeroLine`), `components/GameMomentumChart.tsx` (új),
+`app/(tabs)/games/[id].tsx` („Momentum" szekció a „Negyedek" után)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan (EXIT 0). A
+`toMomentum` a `toQuarters` bevált szűrésmintáját követi (saját oldal a
+`homeAway`, ellenfél a másik `home`/`away`, `unknown` kimarad); a diff
+számítása kézzel átnézve. `npx expo export` iOS-re és Androidra is lefut az új
+kóddal; mindkét Hermes bundle tartalmazza a `GameMomentumChart`-ot, a
+„Momentum" feliratot és a `monotoneX` görbét.
+
+**Nyitva maradt:** **Eszközön még nem futott** – valós kijelzőn kell megnézni:
+(1) a Skia canvas renderel-e a szekcióban (a második Skia-vászon a
+projektben); (2) a nulla-alapvonal láthatósága, amikor a görbe mindig pozitív
+vagy mindig negatív (a vonal a keret szélére csúszhat); (3) a `+`/`−`
+előjeles Y feliratok elférnek-e a `chartPadding.left` alatt; (4) 4-nél több
+negyed (hosszabbítás) esetén az X felirat. A kumulatív bontás csak a
+kosarstat-importos meccseknél van meg – a többinél a magyarázó sor fut.
+Hátralévő S7-sorok: Four Factors oszlopdiagram, chart-teljesítmény Android
+eszközön. A press-tooltip (D-094) továbbra is nyitva.
+
+**Commit:** `feat: momentum chart a meccs részletein`
+
+---
 
 ## 2026-09-03 – S7 indul: victory-native XL + Skia, chart téma, játékos trend chart
 
@@ -3719,3 +3769,24 @@ verzió" elve szerint ez külön kör, a vonaldiagram enélkül is teljes érté
 üresben fut; (b) tooltip azonnal – több felület, lassabb első szállítás.
 **Visszavonható?** A tooltip bármikor ráépíthető a komponensre, adatszerkezet-
 váltás nélkül.
+
+---
+
+## D-095 – A momentum chart negyed pontosságú, és külön 0-adatsor rajzolja az alapvonalat
+**Dátum:** 2026-09-03
+**Döntés:** A meccs részletein a momentum (kumulatív pontkülönbség) chart
+negyedenkénti pontokból áll (`N1`…`N4`), nem play-by-play görbéből. A
+nulla-alapvonalat egy második, konstans `0` értékű adatsor (`zero`) rajzolja
+halvány vonalként, nem külön reference-line API.
+**Miért:** (1) Az adatbázisban a legfinomabb elérhető bontás a kosarstat
+`kosarstat_game_quarter_stats.cumulative_points` – valós esemény-szintű
+play-by-play nincs betöltve, és a webes `GamePbpCharts` is negyed
+pontossággal rajzol. (2) A `victory-native` XL-ben nincs `ReferenceLine`; a
+konstans adatsor + `Line` a legkisebb megoldás, plusz réteg vagy Skia-rajz
+nélkül, és a `chartZeroLine` a meglévő `border.strong` tokenből jön (nincs új
+token).
+**Alternatíva:** (a) saját Skia `Path` a `y=0`-hoz a `CartesianChart`
+`children` render-propjából – több kód, a domain-transzformot kézzel kellene
+kiolvasni; (b) alapvonal nélkül – az előjelváltás nem látszik ránézésre.
+**Visszavonható?** Igen; ha később lesz esemény-szintű adat, a chart bemenete
+egy sűrűbb `MomentumPoint[]`-tá bővül, a komponens változatlanul rajzolja.

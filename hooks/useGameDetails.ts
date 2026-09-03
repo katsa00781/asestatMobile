@@ -23,6 +23,7 @@ import type {
   GameReport,
   GameReportType,
   HomeAway,
+  MomentumPoint,
   PlayerGameLine,
   QuarterScore,
   TeamGame,
@@ -31,6 +32,8 @@ import type {
 interface GameDetailsPayload {
   boxScore: PlayerGameLine[];
   quarters: QuarterScore[];
+  /** Negyedenkénti kumulatív pontkülönbség a momentum charthoz. */
+  momentum: MomentumPoint[];
   reports: GameReport[];
   /** A hajrá-bontás a kosarstat nyers tábláiból, vagy `null`, ha nincs. */
   clutch: KosarstatGameClutch | null;
@@ -47,6 +50,7 @@ interface GameDetailsResult extends GameDetailsPayload {
 const EMPTY_PAYLOAD: GameDetailsPayload = {
   boxScore: [],
   quarters: [],
+  momentum: [],
   reports: [],
   clutch: null,
 };
@@ -97,7 +101,7 @@ async function fetchDetails(
 ): Promise<GameDetailsPayload> {
   const statsTable = getSeasonStatsTable(seasonName);
 
-  const [statsResult, reportsResult, quarterRows, clutch] = await Promise.all([
+  const [statsResult, reportsResult, quarterData, clutch] = await Promise.all([
     supabase
       .from(statsTable)
       .select(
@@ -122,7 +126,8 @@ async function fetchDetails(
 
   return {
     boxScore: toBoxScore(statsResult.data),
-    quarters: quarterRows,
+    quarters: quarterData.quarters,
+    momentum: quarterData.momentum,
     reports: toReports(reportsResult.data),
     clutch,
   };
@@ -187,20 +192,24 @@ async function fetchClutch(
 
 /**
  * A negyedenkénti bontás a kosarstat importból származik, és külön kulcson
- * (`kosarstat_game_id`) ül – a meccsek nagy részéhez nincs ilyen sor.
+ * (`kosarstat_game_id`) ül – a meccsek nagy részéhez nincs ilyen sor. Ugyanez
+ * a sorhalmaz adja a momentum chart kumulatív pontkülönbségét is.
  */
-async function fetchQuarters(game: TeamGame, seasonId: string): Promise<QuarterScore[]> {
-  if (!game.kosarstatGameId) return [];
+async function fetchQuarters(
+  game: TeamGame,
+  seasonId: string,
+): Promise<{ quarters: QuarterScore[]; momentum: MomentumPoint[] }> {
+  if (!game.kosarstatGameId) return { quarters: [], momentum: [] };
 
   const { data, error } = await supabase
     .from('kosarstat_game_quarter_stats')
-    .select('team_side, quarter, points')
+    .select('team_side, quarter, points, cumulative_points')
     .eq('kosarstat_game_id', game.kosarstatGameId)
     .eq('season_id', seasonId)
     .order('quarter', { ascending: true });
 
   if (error) throw new Error(error.message);
-  return toQuarters(data, game.homeAway);
+  return { quarters: toQuarters(data, game.homeAway), momentum: toMomentum(data, game.homeAway) };
 }
 
 // --- Rendszerhatár: a Supabase válasza típusozatlan, itt validáljuk. ---
@@ -338,6 +347,43 @@ function toQuarters(rows: unknown, homeAway: HomeAway): QuarterScore[] {
     ourPoints: ourPoints.get(quarter) ?? 0,
     oppPoints: oppPoints.get(quarter) ?? 0,
   }));
+}
+
+/**
+ * Kumulatív pontkülönbség negyedenként, a saját csapat szemszögéből. A
+ * `cumulative_points` a kosarstat oszlopa; ha bármelyik oldalon hiányzik,
+ * momentum chart sincs (üres tömb → magyarázó sor a képernyőn).
+ */
+function toMomentum(rows: unknown, homeAway: HomeAway): MomentumPoint[] {
+  if (!Array.isArray(rows)) return [];
+
+  const ourCumulative = new Map<number, number>();
+  const oppCumulative = new Map<number, number>();
+
+  rows.forEach((row: unknown) => {
+    if (!isRecord(row)) return;
+    const quarter = toNumber(row.quarter);
+    if (quarter <= 0) return;
+    if (typeof row.cumulative_points !== 'number' || !Number.isFinite(row.cumulative_points)) return;
+
+    if (row.team_side === homeAway) ourCumulative.set(quarter, row.cumulative_points);
+    else if (row.team_side === 'home' || row.team_side === 'away') {
+      oppCumulative.set(quarter, row.cumulative_points);
+    }
+  });
+
+  if (ourCumulative.size === 0 || oppCumulative.size === 0) return [];
+
+  const quarters = [...new Set([...ourCumulative.keys(), ...oppCumulative.keys()])].sort(
+    (a, b) => a - b,
+  );
+
+  return quarters
+    .filter((quarter) => ourCumulative.has(quarter) && oppCumulative.has(quarter))
+    .map((quarter) => ({
+      quarter,
+      diff: (ourCumulative.get(quarter) ?? 0) - (oppCumulative.get(quarter) ?? 0),
+    }));
 }
 
 function toReports(rows: unknown): GameReport[] {

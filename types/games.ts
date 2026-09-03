@@ -90,6 +90,18 @@ export interface QuarterScore {
   oppPoints: number;
 }
 
+/**
+ * A kumulatív pontkülönbség egy negyed végén (momentum chart). A kosarstat
+ * import a legfinomabb bontás – valós play-by-play nincs, ezért a görbe
+ * negyedenkénti (D-095).
+ */
+export interface MomentumPoint {
+  /** 1–4 (hosszabbítás esetén tovább). */
+  quarter: number;
+  /** Saját kumulatív pont − ellenfél kumulatív pont az adott negyed végén. */
+  diff: number;
+}
+
 export type GameReportType = 'pregame' | 'postgame' | 'combined' | 'manual';
 
 /** Mentett AI riport a `game_text_reports` táblából – az app csak olvassa. */

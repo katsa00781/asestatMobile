@@ -16,6 +16,7 @@ import { BoxScore } from '@/components/BoxScore';
 import { ClutchPanel } from '@/components/ClutchPanel';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorPanel } from '@/components/ErrorPanel';
+import { GameMomentumChart } from '@/components/GameMomentumChart';
 import { GameScoreCard } from '@/components/GameScoreCard';
 import { QuarterScores } from '@/components/QuarterScores';
 import { ReportCard } from '@/components/ReportCard';
@@ -31,9 +32,8 @@ export default function GameDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { selectedTeam } = useFilterData();
-  const { game, boxScore, quarters, reports, clutch, loading, error, reload } = useGameDetails(
-    id ?? '',
-  );
+  const { game, boxScore, quarters, momentum, reports, clutch, loading, error, reload } =
+    useGameDetails(id ?? '');
 
   const ready = !error && !loading;
   const ourName = selectedTeam?.shortName ?? '';
@@ -56,6 +56,9 @@ export default function GameDetailsScreen() {
 
           <SectionLabel label="Negyedek" style={styles.section} />
           <QuarterScores quarters={quarters} ourName={ourName} opponent={game.opponent} />
+
+          <SectionLabel label="Momentum" style={styles.section} />
+          <GameMomentumChart momentum={momentum} ourName={ourName} opponent={game.opponent} />
 
           <SectionLabel label="Box score" style={styles.section} />
           <BoxScore lines={boxScore} />
