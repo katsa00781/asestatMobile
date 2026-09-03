@@ -135,6 +135,53 @@ Sablon:
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
 
+## 2026-09-03 – Betűkészletek cseréje: teljes magyar glifa-lefedettség
+
+**Mit:** A repóba csomagolt hét TTF eddig mind `latin` subset volt – hiányzott
+belőlük az `ő`/`ű`/`Ő`/`Ű` (Latin Extended-A) meg a `→ ≈ ≤ ≥` –, ezért a magyar
+UI több helyen tofut vagy csendes rendszerbetű-váltást mutatott
+(`ATOMERŐMŰ`, „Erősségek", „Gyűrűvédő", „Félidőben", „SZŐKE", „Büntetőráta",
+„Erőcsatár"). A hét fájl újra elő lett állítva a kanonikus forrásokból
+(`google/fonts`), most már teljes magyar lefedettséggel.
+
+*Előállítás (D-097).* Barlow Condensed SemiBold/Bold: statikus TTF a
+`google/fonts`-ból. DM Sans és JetBrains Mono: a variábilis fájlból
+`fonttools varLib.instancer`-rel pindített statikus súlyok (DM Sans opsz=14,
+wght 400/500/700; JetBrains Mono wght 500/600). Mind a hét ezután
+`pyftsubset`-tel visszavágva: Basic Latin + Latin-1 + Latin Extended-A + román
+diakritikusok + válogatott írásjel/nyíl/matematikai jel (`– — − · … ‰ € →
+↺ ≈ ≠ ≤ ≥ ●`). Lefedettség 222–229 → 341–358 kódpont. Méret 322 KB → 414 KB
+(+92 KB az egész appra).
+
+*Mi maradt hiányzó glifa.* A Barlow Condensed forrásában nincs `→` (kijelző
+betű, a prózát úgyis a DM Sans szedi). A `▲ ▼ ▬ ▾ ✓ ✗ ↺` egyik forrásban
+sincs meg – ezeket továbbra is a lucide ikon (D-031) és a `report-format`
+`plainText`/blokk-jelölő biztonsági háló (D-064) kezeli, ezeket a
+kerülőmegoldásokat **szándékosan bent hagytam**. A `≈`→`~` és a szöveges
+helyzetfeliratok (D-075) is maradnak biztonsági hálónak, bár a glifák már
+megvannak – visszabontásuk külön, kockázatos kör lenne, sok képernyőt érint.
+
+**Fájlok:** `assets/fonts/*.ttf` (mind a 7 csere). A `constants/fonts.ts` és a
+`constants/theme.ts` **változatlan** – ugyanaz a 7 fájlnév, ugyanazok a
+kulcsok.
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` EXIT 0. `npx expo export`
+iOS-re és Androidra is lefut (8.1 / 8.3 MB Hermes bundle); mindkét exportban
+mind a 7 becsomagolt TTF `cmap` tábláját kiolvasva ott van az `ő ű Ő Ű` és a
+teljes Latin Extended-A. A pindített súlyok `usWeightClass`-a helyes
+(400/500/700, ill. 500/600). **Eszközön még nem futott** – valós kijelzőn kell
+megnézni, hogy (1) a pindített DM Sans / JetBrains Mono optikailag megegyezik-e
+a korábbi rajzolattal (tracking, x-magasság), (2) a `tabular-nums` továbbra is
+egyenközű a monóban, (3) a Barlow Condensed `letterSpacing` nem csúszott-e.
+
+**Nyitva maradt:** a fenti kerülőmegoldások visszabontása külön feladat, ha
+kell. A press-tooltip (D-094) és a chart-teljesítmény Android eszközön (S7)
+továbbra is nyitva.
+
+**Commit:** `fix: teljes magyar glifa-lefedettség a betűkészletekben`
+
+---
+
 ## 2026-09-03 – Four Factors oszlopdiagram a meccs részletein (S7)
 
 **Mit:** Lezárult egy újabb S7-sor: a Meccs részletei képernyőn a „Momentum" és
@@ -3880,3 +3927,33 @@ a „four factors" háromra csökkenne.
 alakot keresi, a jövőbeli press-tooltipben (D-094) vagy a box score-ból
 számolva találja meg. A `FourFactorRow.our` / `.opp` mindig százalék.
 **Visszavonható?** Igen, a `toFourFactors` `factor` szorzója és az X felirat.
+
+---
+
+## D-097 – A csomagolt betűkészletek teljes magyar lefedettségűek, nem `latin` subset
+**Dátum:** 2026-09-03
+**Döntés:** A hét `assets/fonts/*.ttf` a kanonikus forrásból (`google/fonts`)
+lett újra előállítva: Barlow Condensed statikus TTF, a DM Sans és a JetBrains
+Mono a variábilis fájlból `fonttools varLib.instancer`-rel pindítve (DM Sans
+opsz=14, wght 400/500/700; JetBrains Mono wght 500/600), majd mind a hét
+`pyftsubset`-tel visszavágva Basic Latin + Latin-1 + Latin Extended-A + román
+diakritikus + válogatott írásjel/nyíl/matematikai jel készletre. A fájlnevek,
+a `constants/fonts.ts` kulcsok és a `theme.fontFamily` értékek változatlanok.
+**Miért:** A korábbi hét fájl `latin` subset volt (222–229 kódpont), amiből
+hiányzott az `ő`/`ű` (Latin Extended-A) és a `→ ≈ ≤ ≥`. Hiányzó glifánál iOS
+csendben rendszerbetűre vált (elrontva a numerikus igazítást), Android tofut
+rajzol – a magyar UI több feliratát érintette. A saját `pyftsubset`-tel
+kézben tartott, bővebb (341–358 kódpont) subset a teljes magyar ábécét hozza,
+és csak +92 KB-ot ad az egész apphoz (322 → 414 KB).
+**Alternatíva:** (a) teljes, nem subsetelt TTF-ek – ~1 MB fölösleges glifa;
+(b) a `latin-ext` Google-subset letöltése – függ a Google CSS API pillanatnyi
+darabolásától, kevésbé reprodukálható, mint a saját `pyftsubset` hívás;
+(c) marad a kerülőmegoldás-halmaz (ikon + `plainText`) minden ékezetre – nem
+skálázik, a nyers felirati szövegre nem is alkalmazható.
+**Következmény:** A `▲ ▼ ▬ ▾ ✓ ✗ ↺` és a Barlow `→` továbbra sincs meg (a
+forrásfontokban sincs), ezekre marad a lucide ikon (D-031) és a `report-format`
+biztonsági háló (D-064). A pindített DM Sans neve `name` táblában „DM Sans
+9pt" (a variábilis STAT maradványa) – RN-oldalon lényegtelen, mert explicit
+kulccsal töltjük.
+**Visszavonható?** Igen; a `/tmp`-beli előállítási lépések bármikor
+megismételhetők más glifakészlettel, a fájlnevek stabilak.
