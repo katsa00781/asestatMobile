@@ -89,11 +89,11 @@
 
 ## S7 – Chartok
 
-- [ ] `victory-native` + `@shopify/react-native-skia` telepítése és Metro/babel konfig
-- [ ] Játékos trend chart (pont / valuation idősor)
+- [x] `victory-native` + `@shopify/react-native-skia` telepítése és Metro/babel konfig
+- [x] Játékos trend chart (pont / valuation idősor)
 - [ ] Kumulatív pontkülönbség (momentum) chart a meccs részletein
 - [ ] Four Factors oszlopdiagram
-- [ ] Chart téma modul a `constants/theme.ts` tokenjeiből (a webes `lib/chart-theme.ts` mintájára)
+- [x] Chart téma modul a `constants/theme.ts` tokenjeiből (a webes `lib/chart-theme.ts` mintájára)
 - [ ] Chart teljesítmény-ellenőrzés valós Android eszközön (Skia a leggyengébb pont)
 
 ---
@@ -134,6 +134,75 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-03 – S7 indul: victory-native XL + Skia, chart téma, játékos trend chart
+
+**Mit:** Elindult a chart blokk. Egy committ három S7-sort zár le: a
+`victory-native` (XL, ^42.0.1) + `@shopify/react-native-skia` (2.6.2)
+telepítése, a `constants/chart-theme.ts` téma modul, és az első valódi chart –
+a játékos részletei képernyőn a „Forma" szekció pont/értékelés idősora.
+
+*Csomagok (D-093).* `npx expo install`-lal, SDK 57-kompatibilis verziók. A
+két csomag a tech stack listában eddig is szerepelt, de a `CLAUDE.md` minden
+új csomagra rákérdezést ír elő – engedélyt kaptam. Peer-igény: reanimated
+>=3.19.1 (van 4.5.1), gesture-handler >=2 (van 2.32), skia >=2.6 <3 (van
+2.6.2). **Metro/babel konfig nem kellett:** a `babel-preset-expo` a worklets
+plugint már hozzáadja (a `babel.config.js` kommentje is ezt írja), a Skia
+autolinkel, web-target nincs. A konfigsort így az „nincs teendő" igazolása
+zárja le.
+
+*Chart téma modul.* `constants/chart-theme.ts` – a webes `lib/chart-theme.ts`
+mobil párja, minden érték a `constants/theme.ts` tokenjeiből: `chartSeries`
+(6 accent szín szerep szerint), `chartAxis` (label szín/méret/offset, tick-
+szám, rács- és keretszín a `border.subtle`-ből), `chartStroke`, `chartPadding`
+/ `chartDomainPadding`. A Skia `font` mezőt szándékosan **nem** tartalmazza –
+azt csak `useFont` hookból lehet betölteni, ezért a hívó tölti ki
+(`chartFontSource` a Barlow Condensed ttf, a `constants/fonts.ts` require-
+mintájára).
+
+*Játékos trend chart.* Új komponens: `components/PlayerTrendChart.tsx`. A
+`usePlayerDetails` a meccseket dátum szerint csökkenőben adja, a chart
+időrendben nő – a komponens megfordítja. Felül `SegmentedControl` vált a két
+metrika közt (Pont – cián / Értékelés – narancs); a webes „Pontok
+meccsenként" és „Hatékonyság (VAL)" kártya egy vászonban. `CartesianChart` +
+`Line` (`monotoneX` görbe, 300 ms timing animáció) + `Scatter` a
+pontjelekhez, `GlowCard`-ban. X tengely: rövid dátum (`05.25`), Y: egész.
+Kevesebb mint két meccsnél magyarázó sor a chart helyett (D-047 mintája).
+**Press-tooltip nincs a v1-ben (D-094):** a `useChartPressState`
+SharedValue-jait RN-oldalon `Reanimated.Text`/`useDerivedValue` kötné be – a
+„legkisebb működő verzió" elve szerint ez külön kör.
+
+*Miért egy commitban a három sor (D-094).* Egy nem importált chart-
+komponenst a Metro nem csomagol, tehát a bundle-füstteszt (a projekt bevett
+ellenőrzése) valós on-screen fogyasztó nélkül nem mutatna semmit. Ezért a
+telepítés + téma + első chart együtt megy, ahogy annak idején a `@core`
+füstteszt is egy valódi képernyős hívással.
+
+**Fájlok:** `constants/chart-theme.ts` (új),
+`components/PlayerTrendChart.tsx` (új), `app/(tabs)/players/[id].tsx`
+(„Forma" szekció az átlagrács után), `package.json` + `package-lock.json`
+(két csomag)
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` hibátlan (EXIT 0).
+`npx expo export` **iOS-re és Androidra is lefut** az új natív függőségekkel
+(Skia); mindkét Hermes bundle (8.1 / 8.3 MB) tartalmazza a chart kódját
+(`monotoneX`, „Trend metrika"). A trendadat-előkészítés (fordított sorrend,
+1-alapú index, rövid dátum) kézzel átnézve az `usePlayerDetails` valós
+kimenetére.
+
+**Nyitva maradt:** **Eszközön még nem futott** – ez az első Skia-vászon a
+projektben, tehát valós eszközön kell megnézni: (1) hogy a Skia canvas
+egyáltalán renderel-e iOS-en és Androidon a Hermes + új architektúra alatt;
+(2) az X tengely dátumfeliratai 15-20 meccsnél nem lógnak-e össze (tickCount
+4, de sűrű adat); (3) a `monotoneX` görbe és a `Scatter` pontok igazodása;
+(4) a 220pt-os chart + szegmentált kontroll együtt a `GlowCard`-ban. A
+press-tooltip (D-094) és a chart-teljesítmény Android-ellenőrzés (S7 utolsó
+sora) továbbra is nyitva. Hátralévő S7-sorok: momentum chart a meccs
+részletein, Four Factors oszlopdiagram.
+
+**Commit:** `feat: játékos trend chart – victory-native XL + Skia, chart téma modul`
+
+---
 
 ## 2026-09-03 – Tab layout véglegesítése
 
@@ -3609,3 +3678,43 @@ az ikon `accent.ai`-val – kontrasztvesztés a sötét sávon.
 **Következmény:** A `TabBar` már nem az `accentColor` táblából olvas (az az
 `accent.ai` sötét lilát adná), hanem saját `TONE_FOREGROUND` leképezésből.
 **Visszavonható?** Igen, a `TAB_TONE` kiürítésével minden tab ciánra áll vissza.
+
+---
+
+## D-093 – Chart könyvtár: victory-native XL + @shopify/react-native-skia
+**Dátum:** 2026-09-03
+**Döntés:** A charting réteg a `victory-native` XL (^42.0.1) a
+`@shopify/react-native-skia` (2.6.2) motorral, `npx expo install`-lal, SDK
+57-kompatibilis verziókon. Metro/babel konfig nem kellett hozzá.
+**Miért:** Mindkét csomag a `CLAUDE.md` tech stack listájában eleve szerepel;
+a victory-native XL a de facto RN chartkönyvtár, Skia-alapú, reanimated
+worklet animációval – illik a Dark Command Center animációs elvárásaihoz. A
+peer-igényeket a projekt már teljesíti (reanimated 4.5.1, gesture-handler
+2.32, skia 2.6.2). A `babel-preset-expo` a worklets plugint automatikusan
+hozzáadja, a Skia autolinkel, web-target nincs – ezért nulla konfigváltozás.
+**Alternatíva:** (a) `react-native-svg` + kézi path-számítás – kevesebb függő,
+de az animáció és a tengelylogika mind saját kód; (b) `react-native-gifted-
+charts` – kevésbé testreszabható tengely/rács. A `CLAUDE.md` a victory-native-t
+nevesíti, ezért az.
+**Visszavonható?** Nehezen – a chartkomponensek az API-ra épülnek. A téma
+modul (`constants/chart-theme.ts`) viszont könyvtárfüggetlen.
+
+---
+
+## D-094 – Az S7 setup sorai az első charttal egy commitban, press-tooltip nélkül
+**Dátum:** 2026-09-03
+**Döntés:** A „telepítés + Metro/babel konfig" és a „chart téma modul" S7-sor
+nem külön commit, hanem a „Játékos trend chart" feature-rel együtt megy. A
+`PlayerTrendChart` a v1-ben nem kap press-tooltipot (aktív pont + értékbuborék
+koppintásra).
+**Miért:** A projekt bevett füsttesztje a `npx expo export` mindkét
+platformra, majd a bundle grepje. Egy nem importált chartkomponenst a Metro
+nem csomagol, tehát a telepítés önálló commitja semmit nem bizonyítana –
+kell egy valós, képernyőre kötött fogyasztó. Ugyanez a minta, mint a `@core`
+füstteszté (S3). A press-tooltiphez a `useChartPressState` SharedValue-jait
+`Reanimated.Text` / `useDerivedValue` kötné az RN fába; a „legkisebb működő
+verzió" elve szerint ez külön kör, a vonaldiagram enélkül is teljes értékű.
+**Alternatíva:** (a) üres setup commit + külön chart commit – a füstteszt
+üresben fut; (b) tooltip azonnal – több felület, lassabb első szállítás.
+**Visszavonható?** A tooltip bármikor ráépíthető a komponensre, adatszerkezet-
+váltás nélkül.

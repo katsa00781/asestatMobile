@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { ErrorPanel } from '@/components/ErrorPanel';
 import { PlayerGameLog } from '@/components/PlayerGameLog';
 import { PlayerProfileCard } from '@/components/PlayerProfileCard';
+import { PlayerTrendChart } from '@/components/PlayerTrendChart';
 import { ReportCard } from '@/components/ReportCard';
 import { SectionLabel } from '@/components/SectionLabel';
 import { ShootingPanel } from '@/components/ShootingPanel';
@@ -52,6 +53,9 @@ export default function PlayerDetailsScreen() {
         <>
           <PlayerProfileCard player={player} />
           <AverageGrid player={player} />
+
+          <SectionLabel label="Forma" style={styles.section} />
+          <PlayerTrendChart games={games} />
 
           <SectionLabel label="Dobás" style={styles.section} />
           <ShootingPanel shooting={player.shooting} />
