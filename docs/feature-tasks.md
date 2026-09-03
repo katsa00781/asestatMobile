@@ -135,6 +135,61 @@ Sablon:
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
 
+## 2026-09-03 – EAS iOS build javítása: lockfile újragenerálás npm 10-zel
+
+**Mit:** Az első `eas build --platform ios --profile production` az „Install
+dependencies" fázisban elhasalt (`UNKNOWN_ERROR`). A felhő-logból (EAS
+GraphQL `logFiles`) kiderült a valódi ok:
+
+```
+npm error `npm ci` can only install packages when your package.json and
+package-lock.json ... are in sync.
+npm error Missing: @emnapi/core@1.11.3 from lock file
+npm error Missing: @emnapi/runtime@1.11.3 from lock file
+```
+
+A `package-lock.json` inkonzisztens volt: a `@napi-rs/wasm-runtime@1.2.3`
+(az `eslint-config-expo` → `unrs-resolver` dev-ág wasm-fallbackja) peer-igénye
+`@emnapi/core@^1.7.1`, a lockfile viszont csak egy elavult beágyazott
+`@emnapi/*@1.10.0`-t tartalmazott, a feloldott `1.11.3`-at nem. A helyi
+**npm 11.6.1** ezt nem veszi észre (`npm install` „up to date"), az EAS builder
+**npm 10.9.8**-a viszont `npm ci`-nél hard error. Az `expo-updates` friss
+hozzáadása (előző commit) csak együtt járt ezzel, nem oka.
+
+*Javítás.* `rm package-lock.json && npx npm@10.9.8 install` – a lockfile-t az
+EAS-szel azonos npm-verzióval generáltam újra. Eredmény: a hiányzó
+`expo-updates` alfa (expo-eas-client, expo-manifests, expo-structured-headers,
+expo-updates-interface, `@expo/code-signing-certificates` lánca) bekerült, a
+más-platformos opcionális bináris-bejegyzések (amiket az npm 11 pakolt bele
+feleslegesen: `@unrs/*`, `@rollup/*`, `@esbuild/*` linux/win) kikerültek.
+**Semmilyen valódi függőség verziója nem változott** – csak platform-opcionális
+bejegyzések mozogtak (12 add / 51 remove a `"version"` sorokból), a runtime-fa
+azonos.
+
+*Ellenőrzés reprodukcióval.* `npx npm@10.9.8 ci --dry-run` a régi lockon
+ugyanazt a hibát dobta, mint az EAS; az új lockon „up to date in 488ms",
+tiszta.
+
+**Fájlok:** `package.json` (+`expo-updates: ~57.0.21` – az előző commitból
+maradt uncommitted), `package-lock.json` (npm 10-es újragenerálás)
+
+**Tesztelve:** `npx npm@10.9.8 ci --dry-run` EXIT 0, `npx tsc --noEmit` EXIT 0,
+`npm run lint` EXIT 0, `npx expo-doctor` 21/21. **Felhő-build újra még nem
+futott** – a következő `eas build -p ios --profile production` a next lépés.
+
+**Nyitva maradt:** Regressziós kockázat (D-099): ha egy fejlesztő helyi
+**npm 11**-gyel futtat `npm install`-t, az visszapakolhatja a
+kereszt-platformos opcionális ágat, és ha közben megint inkonzisztens emnapi
+állapot áll elő, az EAS-build újra elhasalhat. Csökkentés: `packageManager:
+"npm@10.9.8"` a `package.json`-ban (corepack), de ez külön, jóváhagyást
+igénylő lépés – egyelőre nem tettem be. Az Android EAS-build (Linux worker)
+`npm ci`-jét még nem próbáltam ezzel a lockkal; a hiányzó `@unrs/*` linux
+bináris csak az eslinthez kellene, amit az EAS nem futtat.
+
+**Commit:** `fix: EAS iOS build – package-lock.json újragenerálás npm 10-zel`
+
+---
+
 ## 2026-09-03 – Ship előtt: audit + TestFlight/EAS előkészítés
 
 **Mit:** A „Ship előtt" lista eszköz nélkül elvégezhető sorai lezárva, és
@@ -4045,3 +4100,27 @@ rá mockup; (b) `supportsTablet: false` – akkor csak iPhone-emulált módban
 futna iPaden (fekete sávok, 1× / 2× nagyítás), rosszabb élmény.
 **Visszavonható?** Igen, a `requireFullScreen` egy sor. Ha később lesz iPad
 landscape UI, ez törölhető és az `orientation` bővíthető.
+
+---
+
+## D-099 – A `package-lock.json`-t az EAS-szel azonos npm-verzióval generáljuk
+**Dátum:** 2026-09-03
+**Döntés:** A lockfile-t `npx npm@10.9.8 install`-lal regeneráltam (nem a helyi
+npm 11.6.1-gyel), mert az EAS Build iOS/Android builder image npm 10.9.8-at
+használ, és a két npm-generáció eltérően kezeli a kereszt-platformos opcionális
+függőségeket. A `packageManager` mezőt (corepack-pin) **nem** vezettem be.
+**Miért:** Az npm 11 a lockfile-ba pakolja az összes platform opcionális
+binárisát, de a mostani fánál ez inkonzisztens állapotot hagyott
+(`@napi-rs/wasm-runtime` peer `@emnapi/*` feloldva, de nem beírva) – az EAS
+`npm ci` ezért elhasalt. Az npm 10-es lock szűkebb, de belsőleg konzisztens, és
+az npm 11 `npm ci` is elfogadja (visszafelé kompatibilis). A `packageManager:
+npm@…` corepack-pin megoldaná a verzió-drift gyökerét, de az npm+corepack az
+EAS-en kevésbé bejáratott, és önálló buildkockázat – külön, jóváhagyott lépés
+legyen, ne mellékhatás.
+**Alternatíva:** (a) `packageManager: "npm@11.6.1"` – az EAS-t húzná fel npm
+11-re corepackkel, de kísérleti úton; (b) `.npmrc`-ben `optional=false` – az
+EAS `npm ci` átugraná az opcionális ellenőrzést, de globálisan kikapcsolja az
+opcionális deps-et minden környezetben; (c) a hiányzó `@emnapi/*` sorok kézi
+beírása a lockba – törékeny, a következő `npm install` felülírja.
+**Visszavonható?** Igen. A lockfile bármikor újragenerálható; ha a
+verzió-drift visszatér, a `packageManager`-pin az elsődleges következő lépés.
