@@ -40,7 +40,7 @@
 - [x] `app/_layout.tsx` auth guard: nincs session → login, van → `(tabs)`
 - [x] Teszt: bejelentkezés valós Supabase felhasználóval **iOS szimulátoron**
 - [ ] Teszt: bejelentkezés valós Supabase felhasználóval **Android emulátoron** (nincs telepítve ezen a gépen)
-- [ ] Push GitHub-ra (kérésre)
+- [x] Push GitHub-ra (2026-09-03, `origin/master`)
 
 ---
 
