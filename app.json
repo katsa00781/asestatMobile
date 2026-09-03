@@ -8,6 +8,7 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
+      "requireFullScreen": true,
       "bundleIdentifier": "hu.ase.asestats"
     },
     "android": {
@@ -27,7 +28,19 @@
       "expo-router",
       "expo-status-bar",
       "expo-font",
-      "expo-splash-screen"
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#050B14",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "dark": {
+            "backgroundColor": "#050B14",
+            "image": "./assets/splash-icon.png",
+            "imageWidth": 200
+          }
+        }
+      ]
     ],
     "scheme": "asestats",
     "backgroundColor": "#050B14",

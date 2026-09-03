@@ -106,10 +106,10 @@
 - [ ] Android hardveres back gomb minden sheet/modal képernyőn
 - [ ] Safe area ellenőrzése notch-os és notch nélküli eszközön, Android gesztus- és gombnavigációval
 - [ ] Sötét/világos rendszertéma: az app mindkettőben sötét marad, nincs elrontott kontraszt
-- [ ] Lint + typecheck hibák nélkül
-- [ ] Dev utilities eltávolítása (teszt gombok, `console.log`, mock data)
-- [ ] Secrets ellenőrzése: nincs service role / AI kulcs a bundle-ben és a git historyban
-- [ ] App ikon, splash screen, `app.json` bundle identifier + package name
+- [x] Lint + typecheck hibák nélkül
+- [x] Dev utilities eltávolítása (teszt gombok, `console.log`, mock data)
+- [x] Secrets ellenőrzése: nincs service role / AI kulcs a bundle-ben és a git historyban
+- [x] App ikon, splash screen, `app.json` bundle identifier + package name
 - [ ] EAS Build production binary mindkét platformra + éles eszközön tesztelés
 - [ ] TestFlight (iOS) és Google Play internal testing (Android)
 
@@ -134,6 +134,75 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-03 – Ship előtt: audit + TestFlight/EAS előkészítés
+
+**Mit:** A „Ship előtt" lista eszköz nélkül elvégezhető sorai lezárva, és
+elkészült a felhő-build váza. A tényleges EAS Build + TestFlight/Play feltöltés
+a te Expo- és Apple-fiókodat igényli – a lépések a „Nyitva maradt"-ban.
+
+*Audit.* `npx tsc --noEmit` és `npm run lint` EXIT 0. `npx expo-doctor` 21/21
+(előtte 5 patch-verzió lemaradt az SDK 57-től – `npx expo install --fix`,
+csak patch-bump a `~57.0.x` sávon belül, kód nem változott). Dev utility
+nincs: az egyetlen `console.*` a `store/filterStore.ts` védekező `console.warn`-ja
+(tárolt szűrő visszaolvasási hibája – ez maradhat), teszt gomb / mock data
+nincs, a „mock" találatok mind `Mockup:` doc-kommentek. Titok-ellenőrzés: a
+`.env` nincs verziózva (`.env.example` üres sablon), a git history és a
+munkafa nem tartalmaz service role / AI kulcsot, csak a `CLAUDE.md`
+figyelmeztető szövegét. Az `assets/App-Icon-selection.png` (hivatkozatlan
+320×320 ikon-export, cruft) törölve.
+
+*npm audit.* 14 „moderate" a `@expo/*` build-tooling tranzitív fáján
+(`metro-config`, `config-plugins`, `prebuild-config`) – ezek dev-időben futnak,
+nem kerülnek a kliens bundle-be, és az Expo SDK szándékosan ezekre pinnel. Nem
+javítható `--force` nélkül, ami törné a buildet. Nem intézkedünk.
+
+*Splash screen.* Az `expo-splash-screen` plugin eddig konfiguráció nélküli
+puszta string volt – sötét appnál fehér villanás. Most `#050B14` háttér +
+`splash-icon.png` (200pt), külön `dark` blokkal is (a rendszer sötét témájában
+ugyanaz).
+
+*iPad (D-098).* `ios.supportsTablet` már `true` volt – az app így is
+telepíthető iPadre. Mellé `ios.requireFullScreen: true`: az app portré-only
+(a mockupok is azok), a `requireFullScreen` lemond az iPad Split View / Slide
+Over többfeladatos módról, amihez minden orientáció támogatása kellene.
+Teljes képernyős portré appként fut iPaden is.
+
+*EAS váz.* Új `eas.json`: `appVersionSource: remote` (a build-számot az EAS
+tartja számon, nem a repo), `production` profil `autoIncrement`-tel és
+`production` csatornával, `preview`/`development` profil belső terjesztéssel
+és iOS szimulátor-buildhez. `submit.production` üres – az `eas submit`
+interaktívan kéri az Apple ID-t / App Store Connect app-ot.
+
+**Fájlok:** `app.json` (splash plugin config, `ios.requireFullScreen`),
+`eas.json` (új), `package.json` + `package-lock.json` (patch-bumpok),
+`assets/App-Icon-selection.png` (törölve)
+
+**Tesztelve:** `npx tsc --noEmit`, `npm run lint`, `npx expo-doctor` mind
+tiszta. `npx expo config --type public` feloldja az új splash- és
+tablet-beállításokat. `npx expo export` iOS + Android EXIT 0 (a font-commit
+után újra). **Build eszközön / felhőben még nem futott.**
+
+**Nyitva maradt:** A tényleges szállítás a te fiókjaiddal, interaktív
+terminálból (én nem tudok bejelentkezni):
+
+1. `npm i -g eas-cli && eas login`
+2. `eas build:configure` (ha kéri a projekt ID-t – ez beírja az
+   `app.json`-ba az `extra.eas.projectId`-t, ehhez commit kell majd)
+3. iOS: `eas build --platform ios --profile production` → utána
+   `eas submit --platform ios --latest` (Apple Developer + App Store Connect
+   app „ASEStats" `hu.ase.asestats` bundle ID-val kell)
+4. Android: `eas build --platform android --profile production` →
+   `eas submit --platform android --latest` (Google Play Console + service
+   account kulcs)
+5. Gyors iterációhoz iOS szimulátorra: `eas build -p ios --profile preview`.
+
+A press-tooltip (D-094) és a chart-teljesítmény valós Android eszközön (S7)
+továbbra is nyitva.
+
+**Commit:** `chore: ship előtt audit és EAS/TestFlight váz`
+
+---
 
 ## 2026-09-03 – Betűkészletek cseréje: teljes magyar glifa-lefedettség
 
@@ -3957,3 +4026,22 @@ biztonsági háló (D-064). A pindített DM Sans neve `name` táblában „DM Sa
 kulccsal töltjük.
 **Visszavonható?** Igen; a `/tmp`-beli előállítási lépések bármikor
 megismételhetők más glifakészlettel, a fájlnevek stabilak.
+
+---
+
+## D-098 – iPaden `requireFullScreen`, portré-only marad
+**Dátum:** 2026-09-03
+**Döntés:** Az `ios.supportsTablet` `true` (az app telepíthető iPadre), mellé
+`ios.requireFullScreen: true`. Az app minden platformon portré-only marad, az
+iPad Split View / Slide Over többfeladatos módot nem támogatjuk.
+**Miért:** A `CLAUDE.md` `orientation: portrait`-ot ír elő, és „azonos UI
+mindkét platformon" – a mockupok is telefon-portré méretűek. Az iPad
+többfeladatos mód minden orientáció támogatását megkövetelné (a landscape
+elrendezést is), ami külön UI-kör. A `requireFullScreen` az Apple által
+támogatott, dokumentált kimaradás erre: az app teljes képernyős portré
+alkalmazásként fut iPaden, ahogy iPhone-on.
+**Alternatíva:** (a) iPad-specifikus landscape/split UI – jelentős munka, nincs
+rá mockup; (b) `supportsTablet: false` – akkor csak iPhone-emulált módban
+futna iPaden (fekete sávok, 1× / 2× nagyítás), rosszabb élmény.
+**Visszavonható?** Igen, a `requireFullScreen` egy sor. Ha később lesz iPad
+landscape UI, ez törölhető és az `orientation` bővíthető.
