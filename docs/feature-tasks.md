@@ -135,6 +135,51 @@ Sablon:
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
 
+## 2026-09-04 – Végleges app ikon beállítása (iOS + Android)
+
+**Mit:** A korábbi placeholder ikonok (kék chevron „A") lecserélve a leadott
+végleges motívumra: sötét gradiens háttér + három oszlop (sötétkék / cián /
+narancs, glow-val). A felhasználó két körben adta le a Figma-exportot – az
+elsőbe bele volt égetve a szaggatott „safe zone" segédkeret, a másodikban
+(1024×1024, opak, tiszta) már jó volt.
+
+*Feldolgozás (ImageMagick).* `assets/icon.png` ← a motívum alfa nélkül,
+`#050B14`-re lapítva (iOS/App Store nem enged átlátszó ikont).
+`assets/android-icon-foreground.png` ← ugyanaz full-bleed, opak.
+`assets/android-icon-monochrome.png` ← három-oszlop fehér sziluett (grayscale
+küszöb 20% + morfológiai open/close a glow-perem levágásához). Az `app.json`
+`android.adaptiveIcon`-ból a `backgroundImage` (világos placeholder) kivéve, a
+`backgroundColor: "#050B14"` marad. Törölt cruft: `android-icon-background.png`,
+`app-Icon-selection.png` (320×320). A guide-mentes 1024-es forrás
+`assets/app-icon-master.png` néven megőrizve. Döntés: D-101.
+
+**Fájlok:** `app.json` (adaptiveIcon – `backgroundImage` sor törölve),
+`assets/icon.png`, `assets/android-icon-foreground.png`,
+`assets/android-icon-monochrome.png` (mind csere), `assets/app-icon-master.png`
+(új), `assets/android-icon-background.png` + `assets/app-Icon-selection.png`
+(törölve), `docs/feature-tasks.md`
+
+**Tesztelve:** `npx expo-doctor` 21/21, `npx expo config --type public` az új
+ikonutakat oldja fel (`icon`, `foregroundImage`, `monochromeImage`; nincs több
+`backgroundImage`). `npx tsc --noEmit` és `npm run lint` EXIT 0. Adaptív ikon
+kör- és squircle-maszkkal renderelve ellenőrizve: squircle-ön tökéletes,
+kör-maszknál a legmagasabb narancs oszlop teteje egy hajszálnyit sérül
+(full-bleed adaptív ikon sajátja, D-101). **Eszközön még nem futott** – valódi
+buildhez kötött.
+
+**Nyitva maradt:** Új bináris build kell mindkét platformra, hogy az ikon a
+telefonon megjelenjen (natív asset, EAS Update nem frissíti):
+`eas build -p ios --profile production` és
+`eas build -p android --profile production`, majd `eas submit`. A splash screen
+(`assets/splash-icon.png`) egyelőre a régi chevron placeholder – a felhasználó
+csak az app ikont kérte, de érdemes lehet ezt is a bar-chart motívumra
+cserélni egy külön körben. A D-099 lockfile-regresszió és a chart-teljesítmény
+Android eszközön (S7) továbbra is nyitva.
+
+**Commit:** `feat: végleges app ikon – bar chart motívum iOS-re és Androidra`
+
+---
+
 ## 2026-09-03 – Production build indításkori crash: hiányzó Supabase env változók
 
 **Mit:** A javított lockfile-lal a felhő-build lefutott (`ffe827f6`, build 3),
@@ -4188,3 +4233,35 @@ kerülhet git-be" elvével; (b) a `.env` felküldése `--include-dotenv`-vel /
 `.easignore` trükkel – törékeny, és a `.env` így is kikerülhetne a repóból.
 **Visszavonható?** Igen, `eas env:delete`. A változók a `.env`-ből bármikor
 újra létrehozhatók.
+
+---
+
+## D-101 – Végleges app ikon: full-bleed motívum mindkét platformon, külön háttérkép nélkül
+**Dátum:** 2026-09-04
+**Döntés:** A leadott 1024×1024 ikonmotívum (sötét gradiens háttér + három
+oszlop: sötétkék / cián `#00D4FF` / narancs `#FF6B35`, glow-val) lett a végleges
+app ikon. iOS: `assets/icon.png` – a motívum alfacsatorna nélkül, `#050B14`-re
+lapítva (az App Store nem enged átlátszó ikont). Android: az
+`assets/android-icon-foreground.png` a **teljes, full-bleed** motívum (nem a
+biztonságos zónába kicsinyítve), `backgroundColor: "#050B14"`, a korábbi
+`backgroundImage` (világos placeholder) **törölve** az `app.json`-ból és a
+fájl is (`assets/android-icon-background.png`). A `monochromeImage` egy tiszta
+három-oszlop sziluett (küszöbözés + morfológiai zárás a forrásból). A 1024-es
+guide-mentes forrás `assets/app-icon-master.png` néven marad meg; a 320×320-as
+`app-Icon-selection.png` cruft törölve.
+**Miért:** A motívum tervileg full-bleed (a gradiens a kompozíció része). Ha a
+foreground-ot a 66%-os biztonságos zónába kicsinyítjük, a saját gradiens
+háttere egy világosabb négyzetként ül a lapos `#050B14`-en – „kártya a kártyában"
+hatás. Full-bleed foregrounddal az Android launcher maszkja csak a sarkokat
+vágja (a legmagasabb narancs oszlop teteje kör-maszknál egy hajszálnyit
+sérül) – ez minden full-bleed adaptív ikon sajátja, és kevésbé zavaró, mint a
+belső négyzet. Külön `backgroundImage` így felesleges, a lapos szín elég.
+**Alternatíva:** (a) foreground a biztonságos zónába kicsinyítve, lapos háttéren –
+látható belső négyzet; (b) a gradiens mint `backgroundImage` + csak az oszlopok
+mint foreground – nincs réteges forrásfájl, külön oszlop-asset kellene;
+(c) `monochromeImage` elhagyása – az Android a színes ikon deszaturált
+változatát használná, de a sziluett tisztább themed ikont ad.
+**Visszavonható?** Igen, a `app-icon-master.png` forrásból bármelyik változat
+újragenerálható; a régi placeholder ikonok a git historyból visszahozhatók.
+**K)** Natív asset – **EAS Update-tel nem frissül**, új bináris build kell
+mindkét platformra, hogy a telefonon megjelenjen.
