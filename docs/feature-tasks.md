@@ -150,6 +150,27 @@ Sablon:
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
 
+## 2026-09-04 – Javítás: az élő box score `minutes <= 0` szűrője mindent kiszűrt volna
+
+**Mit:** A webprojekt oldali `live-scan` gyűjtő megírásakor kiderült, hogy a
+percek (`minutes`) kiszámítása csereesemény-párosításból külön feladat, a
+gyűjtő v1-ben minden `live_player_lines` sort `minutes: 0`-val ír. A
+`hooks/useLiveGame.ts` `toBoxScore()`-ja viszont a lejátszott meccsek
+mintáját másolva `if (minutes <= 0) return [];` szűrést tartalmazott – ez az
+élő box score MINDEN sorát kiszűrte volna, örökre üresnek mutatva a
+szekciót. A szűrés eltávolítva; egy sor puszta létezése már jelzi, hogy a
+játékosnak volt rögzített eseménye (a gyűjtő csak ilyen játékoshoz ír sort).
+D-109.
+
+**Fájlok:** `hooks/useLiveGame.ts`
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` tiszta. Élő tesztadattal
+még nem futott (lásd az S8 1/2 bejegyzést lent).
+
+**Nyitva maradt:** ugyanaz, mint az S8 1/2 bejegyzésben.
+
+**Commit:** `fix: élő box score minutes-szűrő eltávolítása`
+
 ## 2026-09-04 – Élő mérkőzés-követés – mobil adatréteg és UI (S8, 1/2)
 
 **Mit:** Megépült a mobil oldali élő mérkőzés funkció. `types/live.ts` –
@@ -4452,3 +4473,22 @@ fénysávjáé. A 900 ms vizuálisan nyugodt, jól láthatóan „élő" lüktet
 lehetőség lett volna, de a token neve félrevezető lett volna egy másik
 kontextusban.
 **Visszavonható?** Igen, egyetlen szám a tokenfájlban.
+
+## D-109 – Az élő box score nem szűr `minutes <= 0` alapján
+**Dátum:** 2026-09-04
+**Döntés:** A `hooks/useLiveGame.ts` `toBoxScore()`-ja eltávolította a
+lejátszott meccsek mintájából másolt `if (minutes <= 0) return [];` szűrést.
+**Miért:** A webprojekt oldali `live-scan` gyűjtő (lásd `asestats/
+HOWTO-live-scan.md`) a percek kiszámítását csereesemény-párosításból v1-ben
+nem oldja meg – minden `live_player_lines` sor `minutes: 0`-val érkezik. A
+lejátszott meccseknél a `minutes <= 0` helyesen szűri ki a pályára nem lépő
+játékosokat (`hooks/useGameDetails.ts` `toBoxScore()`), élőben viszont ez a
+szűrés a box score MINDEN sorát kidobta volna, mert a gyűjtő minden sort
+0 perccel ír. Egy `live_player_lines` sor puszta létezése már bizonyíték a
+részvételre (a gyűjtő csak olyan játékoshoz ír sort, akinek volt rögzített
+eseménye).
+**Alternatíva:** A gyűjtő írjon egy hamis nemnulla percet – elvetve, mert
+félrevezető adatot mutatna a stábnak ("1 perc" egy valójában ismeretlen
+játékidőnél).
+**Visszavonható?** Igen, a szűrés visszaírható, ha a percek számítása
+elkészül és a gyűjtő valós értéket ír.

@@ -257,6 +257,12 @@ function toSummary(rows: unknown, teamId: string): LiveGameSummary | null {
  * Csak a saját csapatunk sorai – ugyanaz a konvenció, mint a lejátszott
  * meccsek box score-jánál: a statisztikatábla `game_id`-je is csapat-
  * perspektíva-specifikus, itt a `team_side` szűri ugyanezt.
+ *
+ * NINCS `minutes <= 0` szűrés (a lejátszott meccsek box score-jával
+ * ellentétben): a gyűjtő a percek kiszámítását v1-ben nem oldja meg, minden
+ * sor `minutes: 0`-val érkezik (lásd asestats HOWTO-live-scan.md). Egy sor
+ * puszta létezése már azt jelenti, hogy a játékosnak volt rögzített
+ * eseménye – a percalapú szűrés itt mindent kiszűrne.
  */
 function toBoxScore(rows: unknown, homeAway: HomeAway): PlayerGameLine[] {
   if (!Array.isArray(rows)) return [];
@@ -267,9 +273,6 @@ function toBoxScore(rows: unknown, homeAway: HomeAway): PlayerGameLine[] {
     if (typeof id !== 'string' || typeof player_name !== 'string') return [];
     if (team_side !== homeAway) return [];
 
-    const minutes = toNumber(row.minutes);
-    if (minutes <= 0) return [];
-
     return [
       {
         // A `live_player_lines` sor saját id-ja: a `player_id` a forrásban
@@ -277,7 +280,7 @@ function toBoxScore(rows: unknown, homeAway: HomeAway): PlayerGameLine[] {
         playerId: id,
         name: player_name,
         number: toNumber(row.number),
-        minutes,
+        minutes: toNumber(row.minutes),
         points: toNumber(row.points),
         twoMade: toNumber(row.close_made) + toNumber(row.mid_made),
         twoAttempted: toNumber(row.close_attempted) + toNumber(row.mid_attempted),
