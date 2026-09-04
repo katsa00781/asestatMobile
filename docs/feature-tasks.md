@@ -135,6 +135,29 @@ Sablon:
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
 
+## 2026-09-04 – Splash screen ikon a bar chart motívumra
+
+**Mit:** Az `assets/splash-icon.png` (eddig a régi kék chevron placeholder) is a
+bar chart motívumra váltott. A splash-ikon az `app-icon-master.png`-ből készült,
+iOS-stílusú lekerekített sarokmaszkkal (≈22% rádiusz), a sarkokon kívül
+átlátszó – így a `#050B14` splash háttéren magaként az app ikon jelenik meg
+középen. Az `app.json` splash-konfigja változatlan (`image` +
+`imageWidth: 200`, `dark` blokk ugyanez).
+
+**Fájlok:** `assets/splash-icon.png` (csere), `docs/feature-tasks.md`
+
+**Tesztelve:** `npx expo-doctor` 21/21, `npx tsc --noEmit` és `npm run lint`
+EXIT 0. Splash háttéren renderelve ellenőrizve (lekerekített motívum középen,
+nincs látható négyzetél). **Eszközön még nem futott** – új build kell.
+
+**Nyitva maradt:** Ugyanaz a build-igény, mint az app ikonnál (natív asset).
+A D-099 lockfile-regresszió és a chart-teljesítmény Android eszközön (S7)
+továbbra is nyitva.
+
+**Commit:** `feat: splash screen ikon a bar chart motívumra`
+
+---
+
 ## 2026-09-04 – Végleges app ikon beállítása (iOS + Android)
 
 **Mit:** A korábbi placeholder ikonok (kék chevron „A") lecserélve a leadott
