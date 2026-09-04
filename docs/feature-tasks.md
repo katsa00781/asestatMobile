@@ -98,6 +98,21 @@
 
 ---
 
+## S8 – Élő mérkőzés
+
+- [x] `types/live.ts` – élő mérkőzés típusok, a meglévő `PlayerGameLine`/`QuarterScore` újrahasznosításával (D-107)
+- [x] `hooks/useLiveGame.ts` – polling adatréteg (`'card'`/`'full'` mód, fókusz + `AppState` kapuk, kulcsváltáskor reset), nem Realtime (D-103)
+- [x] `components/LivePulse.tsx`, `components/LiveBadge.tsx` – lüktető ÉLŐ jelölő (`duration.pulse` token, D-108)
+- [x] `components/LiveGameCard.tsx` – élő kártya a Ma képernyőn
+- [x] `components/LiveScoreCard.tsx`, `app/(tabs)/games/live.tsx` – teljes élő nézet a `games` stackben, nem hatodik tab (D-104)
+- [x] `components/BoxScore.tsx` – `emptyNote` prop, hogy az élő üres box score szövege ne legyen félrevezető
+- [ ] Backend: `live_games` / `live_player_lines` / `live_quarter_scores` tábla + RLS a webprojekt Supabase-ében (külön repó – D-102)
+- [ ] Backend: `live-scan` Edge Function (MKOSZ netcasting JSON forrás) + `pg_cron` ütemezés (külön repó)
+- [ ] Kézzel feltöltött tesztsorral végigfuttatott UI-teszt: Ma-kártya megjelenés/eltűnés, teljes nézet, hiba, offline, háttérbe/előtérbe váltás
+- [ ] Éles validáció ASE-meccsen (2026-09-25 után) – forrás valódi szerkezete, óra formátuma, csapatnév-egyezés
+
+---
+
 ## Ship előtt
 
 - [ ] Teljes primary flow tesztelése éles iOS eszközön
@@ -134,6 +149,45 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-04 – Élő mérkőzés-követés – mobil adatréteg és UI (S8, 1/2)
+
+**Mit:** Megépült a mobil oldali élő mérkőzés funkció. `types/live.ts` –
+élő típusok. `hooks/useLiveGame.ts` – saját idővonalon pollingol
+(`'full'` 20 mp, `'card'` 60 mp), `useIsFocused()` + `AppState` kapukkal,
+szezon-/csapatváltáskor nullázza az előző csapat adatát (nem
+`useCachedQuery`-re épül, mert az TTL nélküli, „egyszer töltünk" cache –
+lásd D-103). `components/LivePulse.tsx` + `LiveBadge.tsx` – lüktető ÉLŐ
+jelölő. `components/LiveGameCard.tsx` – kártya a Ma képernyőn.
+`components/LiveScoreCard.tsx` + `app/(tabs)/games/live.tsx` – teljes élő
+nézet a `games` stackben (D-104). Bekötve a `hooks/useTodayData.ts`-be és az
+`app/(tabs)/index.tsx`-be – a `hasContent` guard is bővült, hogy
+szezonnyitón se nyomja el az élő kártyát. A `components/BoxScore.tsx` kapott
+egy `emptyNote` propot. Felderítettem és a jóváhagyott tervbe felvettem az
+adatforrást is: az MKOSZ `netcasting*.webpont.com` élő jegyzőkönyve JSON-t ad
+(`storage/full<kód>.html`, három string-cserével dekódolható) – ez adja majd
+a backend gyűjtőt, külön feladatként a webprojektben.
+
+**Fájlok:** `types/live.ts`, `hooks/useLiveGame.ts`,
+`components/LivePulse.tsx`, `components/LiveBadge.tsx`,
+`components/LiveGameCard.tsx`, `components/LiveScoreCard.tsx`,
+`app/(tabs)/games/live.tsx`, `hooks/useTodayData.ts`, `app/(tabs)/index.tsx`,
+`components/BoxScore.tsx`, `constants/theme.ts` (`duration.pulse`, D-108),
+`hooks/useCachedQuery.ts` (`describeError` exportálva).
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` – mindkettő tiszta.
+Eszközön/szimulátoron **nem futott**, és kézzel feltöltött tesztsorral sem:
+a `live_games` / `live_player_lines` / `live_quarter_scores` tábla még nem
+létezik a Supabase-ben – ez a webprojekt oldali munka (séma + RLS + a
+`live-scan` Edge Function), külön repó, külön feladat és jóváhagyás.
+
+**Nyitva maradt:** a teljes backend (séma, RLS, gyűjtő, `pg_cron`), a kézzel
+feltöltött tesztadatos UI-ellenőrzés (Ma-kártya megjelenés/eltűnés, hiba,
+offline, háttérbe/előtérbe váltás, Android hardveres back az élő nézeten),
+és az éles validáció a 2026-09-25-i szezonnyitón. A jóváhagyott teljes terv:
+`/Users/kacsorzsolt/.claude/plans/olvasd-el-a-claude-md-greedy-dream.md`.
+
+**Commit:** `feat: élő mérkőzés – mobil adatréteg és UI`
 
 ## 2026-09-04 – Splash screen ikon a bar chart motívumra
 
@@ -4288,3 +4342,113 @@ változatát használná, de a sziluett tisztább themed ikont ad.
 újragenerálható; a régi placeholder ikonok a git historyból visszahozhatók.
 **K)** Natív asset – **EAS Update-tel nem frissül**, új bináris build kell
 mindkét platformra, hogy a telefonon megjelenjen.
+
+## D-102 – Élő adat három új táblában, nem a `games`/`league_fixtures` bővítésével
+**Dátum:** 2026-09-04
+**Döntés:** Az élő mérkőzés a webprojekt Supabase-ében három új táblát kap
+(`live_games`, `live_player_lines`, `live_quarter_scores`), a `games` és a
+`league_fixtures` séma változatlan marad.
+**Miért:** A `games` sorai NOT NULL végeredményt tárolnak és csapatperspektíva-
+specifikusak, a `league_fixtures.status` CHECK-je (`scheduled/played/postponed/
+cancelled`) pedig a webalkalmazás és a mobil minden fixtures-lekérdezését
+érintené egy `'live'` érték felvételével. Egy külön tábla nem bolygat meg
+egyetlen meglévő lekérdezést sem, és a lezárt meccs igazságforrása is
+egyértelmű marad: a heti Playwright-scrape.
+**Alternatíva:** `status` oszlop hozzáadása a `games`-hez és `'live'` érték a
+`league_fixtures.status` CHECK-jéhez – elvetve, mert minden érintett query-t
+(webes és mobil) újra kellett volna gondolni.
+**Visszavonható?** Igen, a három tábla törölhető anélkül, hogy bármi mást
+érintene.
+
+## D-103 – Polling (20/60 mp), nem Supabase Realtime, az élő adatnál
+**Dátum:** 2026-09-04
+**Döntés:** A `hooks/useLiveGame.ts` saját idővonalon pollingol (`'full'`
+módban 20 mp, `'card'` módban 60 mp), nem `postgres_changes` Realtime-
+csatornán iratkozik fel.
+**Miért:** A forrás gyűjtője maga is csak percenként ír (a tervezett
+`live-scan` Edge Function + `pg_cron`), a Realtime sub-másodperces
+azonnaliságának itt nincs mit kiszolgálnia. A polling nulla új koncepciót hoz
+be: a hibakezelés és a fókuszfüggés a meglévő mintákat (`useCachedQuery`,
+D-027) követi. A Realtime csatorna-életciklust, hibafallbacket és
+publication-konfigurációt hozna egy séma fölé, ami élesben csak 2026-09-25-én
+validálható – ezt korainak ítéltem.
+**Alternatíva:** Realtime feliratkozás azonnal – elvetve, későbbre halasztva
+(v1.1), miután a séma élesben bevált.
+**Visszavonható?** Igen, a `useLiveGame` belseje cserélhető Realtime-ra a
+hívók (Ma-kártya, élő nézet) érintése nélkül.
+
+## D-104 – Az élő nézet a `games` stackben (`games/live.tsx`), nem hatodik tab
+**Dátum:** 2026-09-04
+**Döntés:** A teljes élő nézet az `app/(tabs)/games/live.tsx` route, a
+Meccsek tab saját stackjében, nem egy önálló hatodik tab.
+**Miért:** Az Expo Router `Tabs` a `(tabs)` mappa minden közvetlen gyerekét
+tabnak venné, tehát egy `app/(tabs)/live.tsx` hatodik tabot eredményezne a
+jóváhagyott 5 tabos elrendezés helyett. A `games` alatti route így megkapja a
+`BackHeader` mintáját és az Expo Router swipe-back / Android back
+viselkedését ingyen (D-046 mintája), és fogalmilag is meccs-tartalom.
+**Alternatíva:** Hatodik tab – elvetve, mert a legtöbb napon üres állapotban
+lenne, és bővítené az elfogadott tab-elrendezést engedély nélkül.
+**Visszavonható?** Igen, a fájl áthelyezhető, a route csak a Ma-kártya és a
+meccslista push célpontját érintené.
+
+## D-105 – Külön `LiveBadge`/`LiveGameCard`/`LiveScoreCard`, a meglévő kártyák nem bővülnek
+**Dátum:** 2026-09-04
+**Döntés:** Az élő jelölés (`LiveBadge`), a Ma-kártya (`LiveGameCard`) és a
+teljes nézet fejkártyája (`LiveScoreCard`) új, önálló komponensek – a
+`Badge`, a `LastGameCard` és a `GameScoreCard` nem kapott új propot.
+**Miért:** A `Badge` szándékosan egyetlen `Text` (`overflow: 'hidden'` +
+`alignSelf: 'flex-start'`), egy animált gyerek befogadásához mind a hét
+variánsnál megváltozna a viselkedése. A `GameScoreCard`/`LastGameCard` pedig
+kötelező `result: 'win' | 'loss'`-t és `date`-et vár, élőben egyik sincs –
+propokkal négy elágazásúvá váltak volna. A CLAUDE.md „meglévő UI-t ne
+változtass engedély nélkül" szabálya mellett a duplikáció itt olcsóbb, mint a
+meglévő komponensek szétágaztatása.
+**Alternatíva:** Opcionális propok a meglévő komponenseken – elvetve a fenti
+okok miatt.
+**Visszavonható?** Igen, egyszerű fájlok, nincs megosztott állapotuk.
+
+## D-106 – A `live_player_lines` sor saját `id`-ja a `playerId`, nem a `players.id`
+**Dátum:** 2026-09-04
+**Döntés:** A `hooks/useLiveGame.ts` `toBoxScore()`-ja a `live_player_lines`
+sor saját `id` oszlopát írja a `PlayerGameLine.playerId` mezőbe, nem próbálja
+a nevet vagy a forrás játékoskódját meglévő `players` sorra feloldani.
+**Miért:** Az élő forrás játékosneve nem biztos, hogy azonnal egyezik az
+adatbázis `players.name` alakjával (ékezet, sorrend, becenév), a feloldás a
+backend gyűjtő feladata lenne, nem a mobil kliensé. A `PlayerGameLine.playerId`
+típusa `string` (nem nullable) marad, a `BoxScore` komponens pedig a mezőt
+amúgy sem használja máshogy, mint listakulcsként – így a `types/games.ts`
+érintetlen maradhat.
+**Alternatíva:** `playerId: string | null`-ra lazítás – elvetve, mert az egész
+app érintett lett volna (`usePlayerDetails`, `PlayerGameLog`, `usePlayerData`).
+**Visszavonható?** Igen, ha a backend később megbízhatóan feloldja a
+`player_id`-t, a mapper egy sort változik.
+
+## D-107 – A `live_*` táblák oszlopnevei megegyeznek a meglévő stats-táblákéval
+**Dátum:** 2026-09-04
+**Döntés:** A tervezett `live_player_lines` és `live_quarter_scores` oszlopai
+szó szerint ugyanazok a nevek, mint a szezon-stats táblákban
+(`close_made`, `mid_attempted`, `total_rebounds`, `fouls_committed`, …) és a
+`kosarstat_game_quarter_stats`-ban (`team_side`, `quarter`, `points`,
+`cumulative_points`).
+**Miért:** Így a `hooks/useLiveGame.ts` `toBoxScore()`/`toQuarters()`
+mapperei szó szerint a `hooks/useGameDetails.ts` bevált mintáját másolják –
+nem kellett új leképezési logikát kitalálni, és a két adatforrás közötti
+váltás (élő → hétvégi végleges) sem hoz oszlopnév-zavart, ha valaki később a
+kettőt összehasonlítja.
+**Alternatíva:** Saját, rövidebb oszlopnevek az élő táblákhoz – elvetve, mert
+a mappereket is duplikálni kellett volna.
+**Visszavonható?** Részben – ez elsősorban a backend séma döntése, a mobil
+oldal ehhez alkalmazkodik.
+
+## D-108 – Új `duration.pulse` token az ÉLŐ jelölő lüktetéséhez
+**Dátum:** 2026-09-04
+**Döntés:** A `constants/theme.ts` `duration` tábla kapott egy `pulse: 900`
+értéket, a `LivePulse` ezt használja a lüktetés ciklusidejéhez.
+**Miért:** A meglévő `duration` értékek (`fast: 200`, `base: 300`, `slow:
+400`, `shimmer: 1200`) egyike sem illik: a rövidek túl kapkodóak lennének
+folyamatos lüktetésre, a `shimmer` pedig szemantikailag a `SkeletonBlock`
+fénysávjáé. A 900 ms vizuálisan nyugodt, jól láthatóan „élő" lüktetést ad.
+**Alternatíva:** A meglévő `duration.shimmer` (1200) újrahasznosítása – elvi
+lehetőség lett volna, de a token neve félrevezető lett volna egy másik
+kontextusban.
+**Visszavonható?** Igen, egyetlen szám a tokenfájlban.

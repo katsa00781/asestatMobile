@@ -1,20 +1,23 @@
 /**
- * A „Ma" képernyő adatai egy helyen: következő meccs, csapat KPI-ok, forma és
- * a legutóbbi meccs.
+ * A „Ma" képernyő adatai egy helyen: élő mérkőzés, következő meccs, csapat
+ * KPI-ok, forma és a legutóbbi meccs.
  *
- * Két meglévő hookot fog össze, nem indít saját lekérdezést:
+ * Három hookot fog össze, egyik sincs itt saját lekérdezéssel újraírva:
+ * - `useLiveGame('card')` – van-e éppen futó meccs, és ha igen, az állása,
  * - `useGameData` – meccsek és fixtures (innen jön a pont- és a kapottpont-átlag,
  *   a forma és a legutóbbi meccs),
  * - `usePlayerData` – szezon-aggregált játékossorok (innen a csapatszintű
  *   lepattanó- és eldobottlabda-átlag).
  *
- * Mindkét hook szűrőpáronként cache-el, és a `Játékosok` tab ugyanezt a
- * játékoslekérdezést használja – a képernyő tehát nem hoz be plusz hálózati
- * kört (D-040).
+ * Mindhárom hook szűrőpáronként cache-el vagy pollingol, és a `Játékosok` tab
+ * ugyanazt a játékoslekérdezést használja – a képernyő tehát nem hoz be plusz
+ * hálózati kört (D-040).
  */
 import { useGameData } from '@/hooks/useGameData';
+import { useLiveGame } from '@/hooks/useLiveGame';
 import { usePlayerData } from '@/hooks/usePlayerData';
 import type { Fixture, GameResult, TeamGame } from '@/types/games';
+import type { LiveGameSummary } from '@/types/live';
 
 /** Ennyi meccs látszik a forma-sávban. */
 export const FORM_SIZE = 5;
@@ -35,6 +38,8 @@ export interface FormSummary {
 }
 
 interface TodayData {
+  /** A `null`, ha nincs futó meccs, vagy az imént véget ért (D-102, D-103). */
+  live: LiveGameSummary | null;
   nextFixture: Fixture | null;
   lastGame: TeamGame | null;
   kpis: TeamKpis;
@@ -52,10 +57,17 @@ const EMPTY_FORM: FormSummary = { results: [], wins: 0, losses: 0 };
 export function useTodayData(): TodayData {
   const games = useGameData();
   const players = usePlayerData();
+  const live = useLiveGame('card');
 
   const played = games.teamStats.played;
 
   return {
+    // Az élő hiba/betöltés szándékosan nem folyik bele a képernyő fő
+    // `loading`/`error` mezőjébe: ha az élő lekérdezés elhasal (pl. a
+    // `live_games` tábla még nem létezik), a Ma képernyő többi része ettől
+    // még működjön. Véget ért meccsnél a kártya eltűnik a Ma képernyőről –
+    // a teljes élő nézet ilyenkor is mutatja a végeredményt.
+    live: live.live && live.live.status !== 'final' ? live.live : null,
     nextFixture: games.nextFixture,
     lastGame: games.lastGame,
     kpis:
@@ -77,6 +89,7 @@ export function useTodayData(): TodayData {
     reload: () => {
       games.reload();
       players.reload();
+      live.reload();
     },
   };
 }

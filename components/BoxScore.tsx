@@ -41,13 +41,18 @@ const LEGEND =
 
 interface BoxScoreProps {
   lines: PlayerGameLine[];
+  /** Az üres állapot szövege – alapértelmezésben a lejátszott meccsé. */
+  emptyNote?: string;
 }
 
-export function BoxScore({ lines }: BoxScoreProps) {
+export function BoxScore({
+  lines,
+  emptyNote = 'Ehhez a meccshez nincs rögzített játékosstatisztika.',
+}: BoxScoreProps) {
   if (lines.length === 0) {
     return (
       <Text className="font-body text-sm text-muted" style={styles.note}>
-        Ehhez a meccshez nincs rögzített játékosstatisztika.
+        {emptyNote}
       </Text>
     );
   }

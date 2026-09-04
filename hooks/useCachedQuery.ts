@@ -112,8 +112,11 @@ export function useCachedQuery<T>({
  * hálózati esetet magyarra fordítjuk. Minden más hiba a Supabase saját üzenetét
  * viszi tovább – az segít a diagnózisban, és nem is jut el a felhasználóig,
  * ha a lekérdezés helyes.
+ *
+ * Exportálva: a `useLiveGame` saját idővonalán fut, nem ezen a hookon
+ * keresztül, de ugyanezt a magyar hibaüzenetet adja.
  */
-function describeError(err: unknown, label: string): string {
+export function describeError(err: unknown, label: string): string {
   const raw = err instanceof Error ? err.message : '';
 
   if (/network request failed|failed to fetch|network error|timeout/i.test(raw)) {

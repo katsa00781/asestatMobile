@@ -188,6 +188,8 @@ export const duration = {
   stagger: 60,
   /** A `SkeletonBlock` fénysávjának egy körbefutása (D-037) */
   shimmer: 1200,
+  /** Az „ÉLŐ" jelölő pontjának egy lüktetése – lásd `LivePulse` (D-108) */
+  pulse: 900,
 } as const;
 
 /**

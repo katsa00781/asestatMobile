@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { ErrorPanel } from '@/components/ErrorPanel';
 import { FormStrip } from '@/components/FormStrip';
 import { LastGameCard } from '@/components/LastGameCard';
+import { LiveGameCard } from '@/components/LiveGameCard';
 import { NextGameCard } from '@/components/NextGameCard';
 import { SkeletonBlock } from '@/components/SkeletonBlock';
 import { StatTile } from '@/components/StatTile';
@@ -25,10 +26,12 @@ export default function TodayScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { selectedTeam } = useFilterData();
-  const { nextFixture, lastGame, kpis, form, played, loading, error, reload } = useTodayData();
+  const { live, nextFixture, lastGame, kpis, form, played, loading, error, reload } = useTodayData();
 
   const ourName = selectedTeam?.shortName ?? '—';
-  const hasContent = nextFixture !== null || played > 0;
+  // Élő mérkőzés akkor is „van mit mutatni", ha szezonnyitón sem lejátszott
+  // meccs, sem kiírt következő nincs még betöltve.
+  const hasContent = live !== null || nextFixture !== null || played > 0;
 
   return (
     <ScrollView
@@ -46,6 +49,9 @@ export default function TodayScreen() {
       {!error && !loading ? (
         hasContent ? (
           <>
+            {live ? (
+              <LiveGameCard live={live} ourName={ourName} onPress={() => router.push('/games/live')} />
+            ) : null}
             <NextGameCard fixture={nextFixture} ourName={ourName} />
             {played > 0 ? <KpiGrid kpis={kpis} /> : null}
             <FormStrip form={form} />
