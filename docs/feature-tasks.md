@@ -157,6 +157,9 @@ előkészítve."), nem általános hálózati hibaként.
 
 ## Ship előtt
 
+> Az iOS build és a TestFlight feltöltés receptje: **`docs/ios-testflight.md`**
+> (Xcode-ból, lokálisan – a natív `ios/` mappát a `npx expo prebuild` generálja).
+
 - [ ] Teljes primary flow tesztelése éles iOS eszközön
 - [ ] Teljes primary flow tesztelése éles Android eszközön
 - [ ] Edge case-ek: üres állapot, hosszú játékosnév, nincs net, lassú net, lejárt session
@@ -191,6 +194,39 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-22 – iOS TestFlight build leírás és alkalmassági ellenőrzés
+
+**Mit:** A lokális, Xcode-ból induló TestFlight buildhez készült egy recept
+(`docs/ios-testflight.md`), és átnéztem, hogy a projekt alkalmas-e rá. Alkalmas:
+a `npx expo prebuild --platform ios` és a `npx pod-install` hibátlanul lefutott
+(110 pod), az `ios/ASEStats.xcworkspace` megnyitható, a séma megosztott, a bundle
+ID, az export compliance jelölő, az 1024-es alfa nélküli ikon és az aggregált
+`PrivacyInfo.xcprivacy` is rendben van. Az `ios/` gitignore-olt, nem kerül be.
+
+Öt nyitott pont került a leírásba, ezekhez döntés vagy külön feladat kell:
+(1) a `CFBundleVersion` most `1`, az `app.json`-ban nincs `ios.buildNumber` – a
+második feltöltés előtt emelni kell; (2) az `expo-splash-screen` `dark` variánsa
+miatt az `Info.plist` `UIUserInterfaceStyle = Automatic`, így a natív felületek
+(Alert, billentyűzet) világos módú eszközön világosak – a két splash variáns
+karakterre azonos, tehát a `dark` blokk elhagyható lenne; (3) lokális buildnél
+nincs `expo-channel-name`, így OTA frissítés nem ér el a binárishoz; (4) 8 Expo
+csomag patch-szinten elmaradt (`expo-doctor` 20/21); (5) a gépen 9,4 GB szabad
+hely maradt, ami egy első Xcode Archive-hoz szűkös.
+
+**Fájlok:** `docs/ios-testflight.md` (új), `docs/feature-tasks.md`.
+Kód nem változott. A `prebuild` átírta a `package.json` `ios`/`android`
+scriptjeit `expo run:*`-ra – visszaállítottam.
+
+**Tesztelve:** `npx expo prebuild --platform ios`, `npx pod-install`,
+`npx expo export --platform ios`, `npx expo-doctor`, `npx tsc --noEmit`,
+`npm run lint` – mind lefutott. **Teljes `xcodebuild archive` NEM futott** (a
+szabad lemezhely miatt), és az aláírás sem – ahhoz Apple fejlesztői fiók kell.
+
+**Nyitva maradt:** a fenti öt pont, valamint maga a feltöltés és a TestFlight
+teszt (a „Ship előtt" szakasz megfelelő sorai).
+
+**Commit:** `docs: iOS TestFlight build leírás`
 
 ## 2026-09-22 – Igazolások képernyő (S9)
 
