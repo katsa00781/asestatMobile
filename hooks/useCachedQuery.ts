@@ -12,6 +12,11 @@
  * 2. **Kulcsváltásig nem mutat idegen adatot.** Amíg az új szűrőhöz nincs
  *    adat, az `empty` érték látszik, nem az előző szezoné.
  *
+ * A `refreshing` a `CLAUDE.md` „spinner csak háttérfrissítésnél" szabályát
+ * szolgálja ki: akkor igaz, ha már van kirajzolt adat, de éppen új kérés fut
+ * (pull-to-refresh vagy újrapróbálás). Fókuszváltáskor a cache-ből kiszolgált
+ * kulcs NEM billenti be, különben minden tabváltásnál felvillanna (D-115).
+ *
  * A fókuszfigyelés miatt a hook (és minden rá épülő hook) **csak képernyőn
  * belül** használható – navigátoron kívül a `useIsFocused` hibát dob.
  */
@@ -35,6 +40,8 @@ interface CachedQueryOptions<T> {
 interface CachedQueryResult<T> {
   data: T;
   loading: boolean;
+  /** Van adat a képernyőn, de a háttérben új kérés fut. */
+  refreshing: boolean;
   error: string | null;
   reload: () => void;
 }
@@ -54,6 +61,7 @@ export function useCachedQuery<T>({
   const [entry, setEntry] = useState<LoadedEntry<T> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [fetching, setFetching] = useState(false);
 
   const focused = useIsFocused();
 
@@ -72,6 +80,15 @@ export function useCachedQuery<T>({
     let active = true;
     setError(null);
 
+    // Csak a tényleges hálózati kérést jelezzük: a cache-ből kiszolgált kulcs
+    // (pl. visszalépés a tabra) nem vált ki frissítés-jelzést.
+    const willFetch = !cache.has(key);
+    if (willFetch) setFetching(true);
+
+    const settle = () => {
+      if (active && willFetch) setFetching(false);
+    };
+
     cache
       .load(key, () => fetcherRef.current())
       .then((data) => {
@@ -83,7 +100,8 @@ export function useCachedQuery<T>({
       .catch((err: unknown) => {
         if (!active) return;
         setError(describeError(err, errorLabel));
-      });
+      })
+      .finally(settle);
 
     return () => {
       active = false;
@@ -99,6 +117,7 @@ export function useCachedQuery<T>({
 
   return {
     data: loaded ? entry.data : empty,
+    refreshing: loaded && fetching,
     // Nincs adat és nincs hiba → még úton van. Kulcs nélkül (hidratálás előtt)
     // is töltés van, különben egy pillanatra üres képernyő villanna fel.
     loading: !loaded && error === null,

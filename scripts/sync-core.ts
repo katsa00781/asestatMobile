@@ -27,10 +27,36 @@ const MODULES = [
   'player-postgame',
   'pregame-scouting',
   'team-analysis',
+  'player-movements',
 ] as const;
 
 /** RN alatt nem futtatható importok – ezekre figyelmeztetünk, de nem patchelünk. */
 const FORBIDDEN_IMPORT = /from\s+['"](react|react-dom|next\/|@supabase\/|node:|fs|path)/;
+
+/**
+ * Típushidak – a webprojekt generált `Database` típusára hivatkozó sorok
+ * átírása a mobil kézi típustükrére.
+ *
+ * A webes kliens típusozott (`lib/supabase.ts` tartalmazza a séma típusait),
+ * a mobil kliensé nem, és nem is lesz az: a mobil app csak olvas, és a
+ * válaszokat rendszerhatáron validálja. Ez generálás, nem kézi patch – a
+ * `core/` továbbra sem szerkeszthető kézzel (D-112).
+ *
+ * Ha egy minta nem illeszkedik, a szinkron figyelmeztet: a webes forrás
+ * megváltozott, és a hidat frissíteni kell.
+ */
+const TYPE_BRIDGES: Record<string, { find: RegExp; replace: string }[]> = {
+  'player-movements': [
+    {
+      find: /import type \{ Database \} from '@\/lib\/supabase';/,
+      replace: "import type { PlayerMovementRow } from '@/types/movements';",
+    },
+    {
+      find: /export type PlayerMovement = Database\['public'\]\['Views'\]\['league_player_movements'\]\['Row'\];/,
+      replace: 'export type PlayerMovement = PlayerMovementRow;',
+    },
+  ],
+};
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const webRoot = resolve(process.env.ASESTATS_WEB_PATH ?? join(projectRoot, '..', 'asestats'));
@@ -62,10 +88,21 @@ for (const name of MODULES) {
     }
   }
 
+  // A típushidak a `@/lib/x` átírás ELŐTT futnak, különben a `@/lib/supabase`
+  // hivatkozásra „nem szinkronizált modult importál" figyelmeztetés jönne.
+  let bridged = raw;
+  for (const bridge of TYPE_BRIDGES[name] ?? []) {
+    if (!bridge.find.test(bridged)) {
+      warnings.push(`${name}.ts típushídja nem illeszkedik: ${bridge.find.source}`);
+      continue;
+    }
+    bridged = bridged.replace(bridge.find, bridge.replace);
+  }
+
   // A webprojekt a testvérmodulokat `@/lib/x` aliasszal hivatkozza. A mobil `@/`
   // a repo gyökerére mutat (és van saját `lib/` mappánk), ezért a szinkron
   // relatív importra írja át őket. Ez generálás, nem kézi patch – lásd D-009.
-  const source = raw.replace(/(['"])@\/lib\/([\w-]+)\1/g, (match: string, quote: string, module: string) => {
+  const source = bridged.replace(/(['"])@\/lib\/([\w-]+)\1/g, (match: string, quote: string, module: string) => {
     if (!(MODULES as readonly string[]).includes(module)) {
       warnings.push(`${name}.ts nem szinkronizált modult importál: ${match}`);
       return match;

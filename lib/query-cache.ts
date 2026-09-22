@@ -23,6 +23,8 @@ const registry = new Set<() => void>();
 export interface QueryCache<T> {
   /** A kulcshoz tartozó adat: cache-ből, ha van, egyébként `fetcher`-rel. */
   load: (key: string, fetcher: () => Promise<T>) => Promise<T>;
+  /** Van-e már (akár még futó) kérés erre a kulcsra – lásd `useCachedQuery`. */
+  has: (key: string) => boolean;
   /** Egy kulcs eldobása – a következő `load` újra letölti. */
   invalidate: (key: string) => void;
 }
@@ -49,6 +51,8 @@ export function createQueryCache<T>(): QueryCache<T> {
       entries.set(key, request);
       return request;
     },
+
+    has: (key) => entries.has(key),
 
     invalidate: (key) => {
       entries.delete(key);

@@ -18,6 +18,9 @@ import { usePressed } from '@/hooks/usePressed';
 /** Az app rövid neve a bal felső sarokban – a mockup fix felirata. */
 const APP_MARK = 'ASE';
 
+/** Üres csapatszűrő esetén ez áll a chipen (Igazolások liga nézet, D-114). */
+const ALL_TEAMS = 'Összes';
+
 export function AppHeader() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -39,7 +42,7 @@ export function AppHeader() {
 /** Az aktuális szezon és csapat, egy koppintásra a szűrővel. */
 function FilterChip({ onPress }: { onPress: () => void }) {
   const chip = usePressed();
-  const { selectedSeason, selectedTeam } = useFilterData();
+  const { selectedSeason, selectedTeam, allTeams } = useFilterData();
 
   return (
     <Pressable
@@ -56,7 +59,7 @@ function FilterChip({ onPress }: { onPress: () => void }) {
       ]}
     >
       <Text className="font-body text-sm text-primary" numberOfLines={1}>
-        {selectedSeason?.name ?? '…'} · {selectedTeam?.shortName ?? '…'}
+        {selectedSeason?.name ?? '…'} · {allTeams ? ALL_TEAMS : (selectedTeam?.shortName ?? '…')}
       </Text>
       {/* Geometriai nyílkarakter helyett ikon: a csomagolt DM Sans subsetben
           nincs meg a ▾ glifa, Androidon tofuként jelenne meg (D-031). */}

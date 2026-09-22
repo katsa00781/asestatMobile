@@ -10,6 +10,10 @@
  *
  * A listákat maga a sheet kéri le a `useFilterData`-ból: a hook modulszintű
  * cache-e miatt ez nem jelent plusz hálózati kérést (D-014).
+ *
+ * Az „Összes követett csapat" sor csak akkor jelenik meg, ha valamelyik
+ * képernyő engedi az üres csapatszűrőt – ma egyedül az Igazolások liga
+ * nézete teszi (D-114).
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check } from 'lucide-react-native';
@@ -33,6 +37,7 @@ export function FilterSheet({ visible, onClose }: FilterSheetProps) {
 
   const selectedSeasonId = useFilterStore((state) => state.selectedSeasonId);
   const selectedTeamId = useFilterStore((state) => state.selectedTeamId);
+  const allowAllTeams = useFilterStore((state) => state.allowAllTeams);
   const setSeason = useFilterStore((state) => state.setSeason);
   const setTeam = useFilterStore((state) => state.setTeam);
 
@@ -71,6 +76,14 @@ export function FilterSheet({ visible, onClose }: FilterSheetProps) {
       <SectionDivider />
 
       <Section label="Csapat">
+        {allowAllTeams && teams.length > 0 ? (
+          <OptionRow
+            label="Összes követett csapat"
+            active={selectedTeamId === null}
+            onPress={() => setTeam(null)}
+          />
+        ) : null}
+
         {teams.length === 0 && loading ? (
           <PlaceholderRows count={3} />
         ) : (

@@ -116,35 +116,42 @@
 ## S9 – Igazolások (a Tabella tab szegmense)
 
 > Forrás: a webprojekt 2026-09-21-i Igazolások feature-e. A design prompt
-> **`docs/design-prompts.md` – P15**, ez még nem futott le.
+> **`docs/design-prompts.md` – P15**, a képernyő közvetlenül ebből épült meg
+> (külön HTML makett nélkül – D-111).
 > Elhelyezés: a Tabella tab második szegmense (`TABELLA · IGAZOLÁSOK`) – lásd D-110.
 
 **Előfeltétel (webprojekt, nem itt):** a `league_player_movements` view még nem
 létezik az éles adatbázisban. Amíg a webes `migrations/add-league-player-movements-view.sql`
-nem futott le a Supabase SQL Editorban, a mobil lekérdezés is 42P01-re fut.
+nem futott le a Supabase SQL Editorban, a mobil lekérdezés is 42P01-re fut – ezt
+a képernyő külön üzenettel mondja ki („Az igazolási adatforrás még nincs
+előkészítve."), nem általános hálózati hibaként.
 
-- [ ] P15 prompt lefuttatása, a kimenet `docs/mockups/` alá mentése (csapatnézet + liga nézet)
-- [ ] A makett elfogadása vagy a prompt újrafuttatása – csak utána megy az implementáció
-- [ ] `scripts/sync-core.ts` `MODULES` bővítése a `player-movements` modullal.
-      **Figyelem:** a webes `lib/player-movements.ts` a `@/lib/supabase`-ből importál
-      `Database` típust – ez nincs a `MODULES` listán, a szinkron figyelmeztetést ad rá.
-      El kell dönteni: a `PlayerMovement` típus kézzel álljon elő a `types/` alatt,
-      vagy a szinkron írja át a típusimportot.
-- [ ] `hooks/usePlayerMovements.ts` – szezon + csapat szerint szűrt, lapozott lekérdezés
+- [x] ~~P15 prompt lefuttatása, a kimenet `docs/mockups/` alá mentése~~ – elhagyva,
+      a prompt maga a specifikáció (D-111)
+- [x] ~~A makett elfogadása vagy a prompt újrafuttatása~~ – elhagyva, lásd D-111
+- [x] `scripts/sync-core.ts` `MODULES` bővítése a `player-movements` modullal.
+      A `Database` típusimportot **típushíd** írja át a `types/movements.ts` kézi
+      tükrére, a `core/` továbbra sem szerkeszthető kézzel (D-112)
+- [x] `hooks/usePlayerMovements.ts` – szezon + csapat szerint szűrt, lapozott lekérdezés
       (`@core/fetch-all-rows`), a `useCachedQuery` mintáját követve
-- [ ] Liga nézet: a `FilterSheet` / `filterStore` engedje az üres csapatszűrőt
-      („Összes követett csapat"), **csak ezen a szegmensen** – más képernyőn az
-      alapcsapat álljon vissza (a web `TeamSelector.tsx:59` ugyanezt csinálja)
-- [ ] `app/(tabs)/standings.tsx` – szegmentált kontroll (`TABELLA` · `IGAZOLÁSOK`),
+- [x] Liga nézet: a `FilterSheet` / `filterStore` engedi az üres csapatszűrőt
+      („Összes követett csapat"), **csak ezen a szegmensen** – kilépéskor és
+      tabváltáskor az alapcsapat áll vissza (D-114)
+- [x] `app/(tabs)/standings.tsx` – szegmentált kontroll (`TABELLA` · `IGAZOLÁSOK`),
       a nagy cím az aktív szegmenst követi
-- [ ] Igazolások nézet a meglévő komponensekkel: `StatTile` rács (5 csempe),
-      `StackedRow` sorok, `Badge` a besorolásnak, `GlowCard` az értelmezési sávnak
-- [ ] Külső link a forrásprofilra – a web `playerProfileUrl()` HTTPS + hostname
-      ellenőrzését át kell hozni, nyers URL-t ne nyissunk meg
-- [ ] Üres és hibaállapot: `EmptyState` / `ErrorPanel`; az „ismeretlen ≠ külföldi klub"
-      értelmezési korlát látszódjon a képernyőn, ne csak a doksiban
-- [ ] Pull-to-refresh (a weben ez egy „Frissítés" gomb)
-- [ ] Tap target audit az új soroknál, iOS + Android ellenőrzés
+- [x] Igazolások nézet a meglévő komponensekkel: `StatTile` rács (5 csempe),
+      `GlowCard` sorok és értelmezési sáv, `Badge` a besorolásnak. A sor saját
+      komponens (`MovementRow`), mert a `StackedRow` numerikus oszlopokra való (D-116)
+- [x] Külső link a forrásprofilra – a `@core` `playerProfileUrl()` HTTPS + hostname
+      ellenőrzése után nyílik csak meg, nyers URL-t nem nyitunk (D-113)
+- [x] Üres és hibaállapot: `EmptyState` / `ErrorPanel`; az „ismeretlen ≠ külföldi klub"
+      értelmezési sáv a lista alján áll
+- [x] Pull-to-refresh (a weben ez egy „Frissítés" gomb) – a `useCachedQuery` új
+      `refreshing` jelzésével (D-115)
+- [x] Tap target audit az új soroknál (a sorok 72pt magasak, teljes szélességben
+      nyomhatók)
+- [ ] Eszközön futtatott ellenőrzés iOS-en és Androidon – valós adattal, a view
+      migrációja után
 
 ---
 
@@ -184,6 +191,52 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-22 – Igazolások képernyő (S9)
+
+**Mit:** Megépült az Igazolások nézet a Tabella tab második szegmenseként, a
+P15 prompt szerint. A `player-movements` modul bekerült a `@core` szinkronba
+(típushíddal, D-112), az adatot a `hooks/usePlayerMovements.ts` tölti a
+`league_player_movements` view-ból, szezonra és csapatra szűrve, lapozva. A
+megjelenítési modellt a `lib/movements-view.ts` állítja össze: öt StatTile
+(érkezők / távozók / hazai váltásból / visszatérő / ismeretlen célba), majd
+szekciózott lista. Csapatnézetben két szekció (Érkezők / Távozók), liga
+nézetben – üres csapatszűrő mellett – csapatonként ragadós fejléc `+4 / -9`
+mérleggel. A sorok `MovementRow`-k: név + forrásprofil-ikon, poszt, besorolás
+badge és honnan/hová. A lista alján az értelmezési sáv mondja ki, hogy az
+„ismeretlen" nem bizonyít külföldi igazolást.
+
+A liga nézethez a `filterStore` kapott egy futásidejű `allowAllTeams` kapcsolót:
+csak ez a szegmens engedi az üres csapatszűrőt, és fókuszvesztéskor vissza is
+áll az alapcsapat (D-114). A `useCachedQuery` új `refreshing` jelzése adja a
+pull-to-refresh spinnerét (D-115). A korábbi `app/(tabs)/standings.tsx` törzse
+`components/StandingsPanel.tsx`-be került, a route már csak a szegmenst
+birtokolja.
+
+**Fájlok:** `scripts/sync-core.ts`, `core/player-movements.ts` (generált),
+`types/movements.ts`, `hooks/usePlayerMovements.ts`, `lib/movements-view.ts`,
+`components/MovementRow.tsx`, `components/MovementsPanel.tsx`,
+`components/StandingsPanel.tsx` (áthelyezve), `app/(tabs)/standings.tsx`,
+`store/filterStore.ts`, `hooks/useFilterData.ts`, `hooks/useCachedQuery.ts`,
+`lib/query-cache.ts`, `components/FilterSheet.tsx`, `components/AppHeader.tsx`,
+`docs/feature-tasks.md`
+
+**Tesztelve:** `npx tsc --noEmit` és `npm run lint` tiszta. `npx expo export
+--platform ios` lefut – a `@core/player-movements` alias és a típushíd Metro
+alatt is felold. **Eszközön/szimulátoron nem futott, és valós adaton sem**: a
+`league_player_movements` view még nem létezik az éles adatbázisban, így a
+képernyő ma az „adatforrás nincs előkészítve" üzenetet adná.
+
+**Nyitva maradt:** (1) **Blokkoló a webprojektben:** a
+`migrations/add-league-player-movements-view.sql` kézi futtatásra vár a Supabase
+SQL Editorban – addig sem a csapat-, sem a liga nézet nem tölt adatot.
+(2) Eszközös ellenőrzés iOS-en és Androidon, valós sorokkal: a ragadós
+csapatfejléc, a pull-to-refresh spinner színe és a hosszú játékosnevek tördelése
+mindkét platformon átnézendő. (3) A liga nézet „N követett csapat" száma a
+`teams` tábla összes sorát számolja; ha a táblában szerepel a webes
+`TeamSelector` által kiszűrt „ASE" duplikátum, a szám eggyel több lehet.
+
+**Commit:** `feat: Igazolások képernyő a Tabella tab szegmenseként`
 
 ## 2026-09-22 – Igazolások: design prompt és feladatlista átemelése a webprojektből
 
@@ -4570,3 +4623,124 @@ adat-hatókör keveredett volna egy tabon. (b) Az Elemzés hub új belépő kár
 – elvetve, mert az Elemzés tab AI-tónusú (lila, `Sparkles`), az igazolás
 viszont nyers tény-adat, egyetlen generált mondat nélkül.
 **Felhasználói döntés**, három felvázolt opció közül választva.
+
+## D-111 – Az Igazolások a P15 promptból épült meg, külön HTML makett nélkül
+**Dátum:** 2026-09-22
+**Döntés:** A P15 promptot nem futtattuk le külső design eszközben; a képernyő
+közvetlenül a prompt szövegéből készült el, amely méretre, színre, sorrendre és
+tartalomra pontos specifikáció.
+**Miért:** A prompt minden elemet pt-ra és tokenre bontva ír le (28pt cím, 28pt
+irány-sáv, 96pt csempék, 72pt sorok, badge-variánsok, a liga nézet eltérései),
+tehát ugyanazt a szerepet tölti be, mint egy makett. Ugyanez a minta már bevált:
+a P5/P7/P13 képernyők (`analysis/situational.tsx`, `roles.tsx`, `scouting.tsx`)
+szintén promptból épültek, makett nélkül. A felhasználó közvetlenül az
+implementációt kérte.
+**Alternatíva:** Előbb HTML makett generálása és elfogadása – elvetve, mert egy
+kör késleltetést adott volna anélkül, hogy a prompthoz képest új információ
+keletkezne.
+**Visszavonható?** Igen: ha a képernyő eltér az elvárttól, a makett utólag is
+elkészíthető, és a komponensek igazíthatók hozzá.
+
+## D-112 – A `@core` szinkron típushídja a `Database` típusimportra
+**Dátum:** 2026-09-22
+**Döntés:** A `player-movements` modul bekerült a `MODULES` listába, és a
+`scripts/sync-core.ts` egy **típushíddal** átírja a benne lévő két sort:
+a `@/lib/supabase`-ből jövő `Database` importot és a belőle származtatott
+`PlayerMovement` típust a `types/movements.ts` kézi `PlayerMovementRow`
+tükrére. Ha a webes forrás úgy változik, hogy a minta nem illeszkedik, a
+szinkron figyelmeztet.
+**Miért:** A modul értékes része a `parsePlayerMovement()` validáció, a
+`playerProfileUrl()` biztonsági ellenőrzése és a két összegző függvény – ezek
+generált másolatként a webprojekthez kötve maradnak. Az egyetlen akadály a
+típusimport volt: a webes kliens típusozott, a mobil nem, és nem is lesz az
+(a mobil app csak olvas, rendszerhatáron validál). A híd a szinkronban él,
+tehát a `core/` továbbra sem szerkesztendő kézzel.
+**Alternatíva:** (a) A modult nem szinkronizáljuk, a négy függvényt kézzel
+lemásoljuk a `lib/` alá – elvetve, mert a biztonsági URL-ellenőrzés és a
+validáció két helyen élt volna, és szétcsúszhatott volna. (b) A teljes séma
+típusait áthozzuk a mobilba – elvetve, aránytalan.
+**Visszavonható?** Igen, a híd és a modul kivehető a listából.
+
+## D-113 – Külső profil csak ellenőrzött URL-lel nyílik meg
+**Dátum:** 2026-09-22
+**Döntés:** A sor csak akkor nyomható, ha a `@core` `playerProfileUrl()`
+visszaad URL-t: HTTPS, `kosarstat.hu` hostname, `/players/player/` útvonal és
+`player` paraméter. Minden más esetben a sor sima kártya marad, link ikon
+nélkül. A megnyitás a `react-native` `Linking.openURL`-jével történik, hibánál
+`Alert`.
+**Miért:** A `profile_url` külső importból származó adat; ellenőrzés nélkül
+tetszőleges séma (`javascript:`, `intent:`) vagy idegen hoszt kerülhetne a
+`Linking`-be. Ugyanez a szabály él a weben is.
+**Alternatíva:** `expo-linking` vagy in-app böngésző – elvetve, mert új felület
+(és a `expo-web-browser` új csomag) lenne, a rendszerböngésző elég.
+**Visszavonható?** Igen, de az ellenőrzést elhagyni nem szabad.
+
+## D-114 – Üres csapatszűrő futásidejű kapcsolóval, csak az Igazolásokon
+**Dátum:** 2026-09-22
+**Döntés:** A `filterStore` kapott egy nem perzisztált `allowAllTeams`
+kapcsolót. A `MovementsPanel` fókuszban bekapcsolja, fókuszvesztéskor és
+unmountkor kikapcsolja; a `FilterSheet` csak ekkor kínálja az „Összes követett
+csapat" sort, az `AppHeader` chipje ilyenkor „Összes"-t ír. A `useFilterData`
+alapértelmezés-visszaállítója figyeli a kapcsolót, így a kikapcsolás pillanatában
+az alapcsapat áll vissza.
+**Miért:** A liga nézetnek üres csapatszűrő kell, de a többi képernyő
+lekérdezése `team_id`-re épül – ha ott is `null` maradna, azok a képernyők
+üresen vagy örök töltésben ragadnának. A webes `TeamSelector` `allowAll`
+propja pontosan ugyanezt a viselkedést valósítja meg.
+**Alternatíva:** (a) A liga nézet saját, store-on kívüli állapotból dolgozik –
+elvetve, mert akkor a fejléc chipje és a szűrő sheet nem mutatná a valóságot.
+(b) A `selectedTeamId` mindenhol nullázható – elvetve, hét hook guardját
+kellett volna átírni egyetlen szegmens kedvéért.
+**Visszavonható?** Igen, a kapcsoló és a `FilterSheet` extra sora kivehető.
+
+## D-115 – `refreshing` jelzés a `useCachedQuery`-ben a pull-to-refreshhez
+**Dátum:** 2026-09-22
+**Döntés:** A `useCachedQuery` visszaad egy `refreshing` értéket: igaz, ha már
+van kirajzolt adat, de éppen hálózati kérés fut. A `QueryCache` ehhez kapott egy
+`has(key)` függvényt – a cache-ből kiszolgált kulcs nem billenti be a jelzést.
+**Miért:** A `RefreshControl`-nak saját „folyamatban" állapot kell, a meglévő
+`loading` viszont csak az első betöltésre igaz (újratöltéskor a régi adat a
+képernyőn marad). A `has()` szűrés nélkül minden tabváltásnál felvillanna a
+spinner, mert a fókuszváltás is lefuttatja a betöltő effectet.
+**Miért ott:** a `CLAUDE.md` szerint az első betöltés skeleton, spinner csak
+háttérfrissítésnél – ez a jelzés pont ezt a szabályt szolgálja ki, ezért a közös
+hookban a helye, nem egy képernyőben.
+**Alternatíva:** Lokális `refreshing` state a képernyőn, amit az adat
+megváltozása old fel – elvetve, mert azonos hibaüzenetnél (változatlan
+`error` string) a spinner beragadt volna.
+**Visszavonható?** Igen, a mező additív, más hook nem használja.
+
+## D-116 – Saját `MovementRow`, nem a `StackedRow` bővítése
+**Dátum:** 2026-09-22
+**Döntés:** Az igazolás-sor önálló komponens (`components/MovementRow.tsx`), a
+`StackedRow` mintáját követve, de a `GlowCard`-ra építve.
+**Miért:** A `StackedRow` jobb oldala fix szélességű **numerikus** oszlopokra
+való (`RowMetric`, `StackedRowHeader` szélesség-egyeztetéssel), az igazolás-sor
+jobb oldalán viszont badge és többsoros célállomás-szöveg áll, a bal sínje pedig
+állandó (cián / narancs), nem csak nyomott állapotban látszik. A `StackedRow`
+bővítése három új, egymást kizáró prop-ot vezetett volna be egy olyan
+komponensbe, amit hat másik képernyő használ.
+**Alternatíva:** `trailing?: ReactNode` prop a `StackedRow`-ba – elvetve, mert a
+„sor jobb oldala numerikus oszlop" szabály felpuhult volna, és a meglévő UI-t
+érintő változtatás lett volna.
+**Visszavonható?** Igen, a két komponens később összevonható.
+
+## D-117 – `SectionList` a listához, nem `ScrollView`
+**Dátum:** 2026-09-22
+**Döntés:** Az Igazolások lista `SectionList`; a fejléc (AppHeader, cím,
+szegmentált kontroll, irány-sáv, csempék) a `ListHeaderComponent`, a hiba- /
+üres- / értelmezési sáv a `ListFooterComponent`. A ragadós csapatfejléc a liga
+nézetben a `stickySectionHeadersEnabled` kapcsolóból jön.
+**Miért:** A liga nézet a webes mintaadat szerint 235 mozgás, teljesebb import
+mellett több is lehet – ennyi sort `ScrollView` egyszerre rajzolna ki. A P15 a
+csapatfejléctől ragadós viselkedést kér, amit a `SectionList` mindkét
+platformon natívan ad; a Tabella `stickyHeaderIndices` trükkje itt nem
+működne, mert a ragadós elem nem egy fix indexű gyerek.
+**Következmény:** a Tabella és az Igazolások **külön görgetőben** él, ezért a
+szegmentált kontroll elemként (`control` prop) megy le a panelekbe, a
+`app/(tabs)/standings.tsx` pedig csak a szegmenst birtokolja. A `SectionList`-re
+a NativeWind nem képez le `className`-t (a css-interop csak a `FlatList`-et és a
+`VirtualizedList`-et mapeli), ezért a felülete StyleSheet-ből jön.
+**Alternatíva:** Közös `ScrollView` mindkét szegmensnek – elvetve a fenti két ok
+miatt.
+**Visszavonható?** Igen, kis lista mellett `ScrollView`-ra cserélhető.

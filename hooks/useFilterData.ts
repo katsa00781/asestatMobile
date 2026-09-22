@@ -40,6 +40,7 @@ export function useFilterData() {
   const hydrated = useFilterStore((state) => state.hydrated);
   const selectedSeasonId = useFilterStore((state) => state.selectedSeasonId);
   const selectedTeamId = useFilterStore((state) => state.selectedTeamId);
+  const allowAllTeams = useFilterStore((state) => state.allowAllTeams);
 
   const { data, loading, error, reload } = useCachedQuery({
     cache,
@@ -53,6 +54,10 @@ export function useFilterData() {
 
   // Az alapértelmezés beállítása megvárja a store visszaolvasását, különben
   // felülírná a felhasználó korábban mentett választását.
+  //
+  // Az `allowAllTeams` az effect függőségeiben van, mert a visszaállítás éppen
+  // a kikapcsolásakor kell: az Igazolások liga nézetéből kilépve az üres
+  // csapatszűrő helyére azonnal az alapcsapat kerül (D-114).
   useEffect(() => {
     if (!hydrated) return;
     const { selectedSeasonId: seasonId, selectedTeamId: teamId, setSeason, setTeam } =
@@ -61,16 +66,20 @@ export function useFilterData() {
     if (seasons.length > 0 && !seasons.some((season) => season.id === seasonId)) {
       setSeason(defaultSeason(seasons).id);
     }
-    if (teams.length > 0 && !teams.some((team) => team.id === teamId)) {
+
+    const emptyTeamAllowed = allowAllTeams && teamId === null;
+    if (teams.length > 0 && !emptyTeamAllowed && !teams.some((team) => team.id === teamId)) {
       setTeam(defaultTeam(teams).id);
     }
-  }, [hydrated, seasons, teams]);
+  }, [hydrated, seasons, teams, allowAllTeams]);
 
   return {
     seasons,
     teams,
     selectedSeason: seasons.find((season) => season.id === selectedSeasonId) ?? null,
     selectedTeam: teams.find((team) => team.id === selectedTeamId) ?? null,
+    /** Üres csapatszűrő: az Igazolások liga nézete. */
+    allTeams: allowAllTeams && selectedTeamId === null,
     loading,
     error,
     reload,
