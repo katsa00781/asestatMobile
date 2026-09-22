@@ -113,6 +113,41 @@
 
 ---
 
+## S9 – Igazolások (a Tabella tab szegmense)
+
+> Forrás: a webprojekt 2026-09-21-i Igazolások feature-e. A design prompt
+> **`docs/design-prompts.md` – P15**, ez még nem futott le.
+> Elhelyezés: a Tabella tab második szegmense (`TABELLA · IGAZOLÁSOK`) – lásd D-110.
+
+**Előfeltétel (webprojekt, nem itt):** a `league_player_movements` view még nem
+létezik az éles adatbázisban. Amíg a webes `migrations/add-league-player-movements-view.sql`
+nem futott le a Supabase SQL Editorban, a mobil lekérdezés is 42P01-re fut.
+
+- [ ] P15 prompt lefuttatása, a kimenet `docs/mockups/` alá mentése (csapatnézet + liga nézet)
+- [ ] A makett elfogadása vagy a prompt újrafuttatása – csak utána megy az implementáció
+- [ ] `scripts/sync-core.ts` `MODULES` bővítése a `player-movements` modullal.
+      **Figyelem:** a webes `lib/player-movements.ts` a `@/lib/supabase`-ből importál
+      `Database` típust – ez nincs a `MODULES` listán, a szinkron figyelmeztetést ad rá.
+      El kell dönteni: a `PlayerMovement` típus kézzel álljon elő a `types/` alatt,
+      vagy a szinkron írja át a típusimportot.
+- [ ] `hooks/usePlayerMovements.ts` – szezon + csapat szerint szűrt, lapozott lekérdezés
+      (`@core/fetch-all-rows`), a `useCachedQuery` mintáját követve
+- [ ] Liga nézet: a `FilterSheet` / `filterStore` engedje az üres csapatszűrőt
+      („Összes követett csapat"), **csak ezen a szegmensen** – más képernyőn az
+      alapcsapat álljon vissza (a web `TeamSelector.tsx:59` ugyanezt csinálja)
+- [ ] `app/(tabs)/standings.tsx` – szegmentált kontroll (`TABELLA` · `IGAZOLÁSOK`),
+      a nagy cím az aktív szegmenst követi
+- [ ] Igazolások nézet a meglévő komponensekkel: `StatTile` rács (5 csempe),
+      `StackedRow` sorok, `Badge` a besorolásnak, `GlowCard` az értelmezési sávnak
+- [ ] Külső link a forrásprofilra – a web `playerProfileUrl()` HTTPS + hostname
+      ellenőrzését át kell hozni, nyers URL-t ne nyissunk meg
+- [ ] Üres és hibaállapot: `EmptyState` / `ErrorPanel`; az „ismeretlen ≠ külföldi klub"
+      értelmezési korlát látszódjon a képernyőn, ne csak a doksiban
+- [ ] Pull-to-refresh (a weben ez egy „Frissítés" gomb)
+- [ ] Tap target audit az új soroknál, iOS + Android ellenőrzés
+
+---
+
 ## Ship előtt
 
 - [ ] Teljes primary flow tesztelése éles iOS eszközön
@@ -149,6 +184,31 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-22 – Igazolások: design prompt és feladatlista átemelése a webprojektből
+
+**Mit:** A webprojekt 2026-09-21-én kapott egy Igazolások feature-t (szezonos
+keretmozgások: érkezők/távozók), ami a 2026-08-30-as mobil tervben még nem
+szerepelt. Átemeltem a hozzá készült **P15 vizuális design promptot** a
+`docs/design-prompts.md`-be (a DS-BLOKK-kal együtt, hogy önállóan futtatható
+legyen), és felvettem az **S9 feladatszakaszt**. Kód nem készült – a prompt még
+nem futott le, makett nélkül nem kezdünk implementációba.
+
+A prompt mintaadata valós: a webes `league_player_team_seasons` 2025/26 → 2026/27
+keretkülönbségéből számolt (ASE 4 érkező / 9 távozó; liga 95 / 140, 14 csapat),
+így a makett valós sűrűségen validál, nem háromelemű demón.
+
+**Fájlok:** `docs/design-prompts.md` (új), `docs/feature-tasks.md`
+
+**Tesztelve:** Nincs mit tesztelni – dokumentáció. Kód, lint, typecheck érintetlen.
+
+**Nyitva maradt:** (1) A P15 még nem futott le, makett nincs. (2) **Blokkoló a
+webprojektben:** a `league_player_movements` view nem létezik az éles
+adatbázisban, a migráció kézi futtatásra vár – addig a mobil lekérdezés is
+42P01-re futna. (3) A `player-movements` `@core` szinkronja típusimport-kérdést
+vet fel, lásd az S9 első pontjait.
+
+**Commit:** `docs: Igazolások design prompt (P15) és S9 feladatszakasz`
 
 ## 2026-09-04 – Javítás: az élő box score `minutes <= 0` szűrője mindent kiszűrt volna
 
@@ -4492,3 +4552,21 @@ félrevezető adatot mutatna a stábnak ("1 perc" egy valójában ismeretlen
 játékidőnél).
 **Visszavonható?** Igen, a szűrés visszaírható, ha a percek számítása
 elkészül és a gyűjtő valós értéket ír.
+
+
+## D-110 – Az Igazolások a Tabella tab szegmense, nem új tab
+**Dátum:** 2026-09-22
+**Döntés:** A webes Igazolások nézet a mobilon a **Tabella tab második
+szegmense** lesz (`TABELLA · IGAZOLÁSOK`). A tab bar címkéje marad „Tabella",
+a képernyő nagy címe viszont az aktív szegmenst követi.
+**Miért:** Az iOS tab bar 5 elemnél nem bővíthető tovább, a webes 13 nav elem
+pedig már 5 tabba van sűrítve. A Tabella és az Igazolások ugyanabba a
+kategóriába esik – mindkettő **liga-szintű, több csapatot átfogó** nézet,
+nem a saját csapat statisztikája –, és a Tabella az egyetlen egy-mélységű tab,
+ahol van hely. A szegmentált kontroll mintája már bevált a Meccsek tabon.
+**Alternatíva:** (a) A Játékosok tab harmadik szegmense – elvetve, mert a Keret
+a saját csapatra szűr, az Igazolások viszont liga-szintű: két különböző
+adat-hatókör keveredett volna egy tabon. (b) Az Elemzés hub új belépő kártyája
+– elvetve, mert az Elemzés tab AI-tónusú (lila, `Sparkles`), az igazolás
+viszont nyers tény-adat, egyetlen generált mondat nélkül.
+**Felhasználói döntés**, három felvázolt opció közül választva.
