@@ -205,8 +205,13 @@ ID, az export compliance jelölő, az 1024-es alfa nélküli ikon és az aggreg�
 `PrivacyInfo.xcprivacy` is rendben van. Az `ios/` gitignore-olt, nem kerül be.
 
 Öt nyitott pont került a leírásba, ezekhez döntés vagy külön feladat kell:
-(1) a `CFBundleVersion` most `1`, az `app.json`-ban nincs `ios.buildNumber` – a
-második feltöltés előtt emelni kell; (2) az `expo-splash-screen` `dark` variánsa
+(1) **megoldva ugyanebben a menetben:** az `app.json` megkapta az
+`ios.buildNumber: "7"` értéket. A korábbi EAS buildek miatt a távoli számláló
+6-on állt (`eas build:version:get`), így az alapértelmezett `1`-es build számot
+az App Store Connect duplikátumként dobta volna. Minden további feltöltés előtt
+emelni kell, és ha valaha újra EAS-szel buildelünk, előbb szinkronba kell hozni
+a távoli számlálót (`eas build:version:set`), mert az `eas.json`
+`appVersionSource: "remote"`-ot használ; (2) az `expo-splash-screen` `dark` variánsa
 miatt az `Info.plist` `UIUserInterfaceStyle = Automatic`, így a natív felületek
 (Alert, billentyűzet) világos módú eszközön világosak – a két splash variáns
 karakterre azonos, tehát a `dark` blokk elhagyható lenne; (3) lokális buildnél
@@ -214,8 +219,8 @@ nincs `expo-channel-name`, így OTA frissítés nem ér el a binárishoz; (4) 8 
 csomag patch-szinten elmaradt (`expo-doctor` 20/21); (5) a gépen 9,4 GB szabad
 hely maradt, ami egy első Xcode Archive-hoz szűkös.
 
-**Fájlok:** `docs/ios-testflight.md` (új), `docs/feature-tasks.md`.
-Kód nem változott. A `prebuild` átírta a `package.json` `ios`/`android`
+**Fájlok:** `docs/ios-testflight.md` (új), `app.json` (`ios.buildNumber`),
+`docs/feature-tasks.md`. Alkalmazáskód nem változott. A `prebuild` átírta a `package.json` `ios`/`android`
 scriptjeit `expo run:*`-ra – visszaállítottam.
 
 **Tesztelve:** `npx expo prebuild --platform ios`, `npx pod-install`,
@@ -226,7 +231,8 @@ szabad lemezhely miatt), és az aláírás sem – ahhoz Apple fejlesztői fiók
 **Nyitva maradt:** a fenti öt pont, valamint maga a feltöltés és a TestFlight
 teszt (a „Ship előtt" szakasz megfelelő sorai).
 
-**Commit:** `docs: iOS TestFlight build leírás`
+**Commit:** `docs: iOS TestFlight build leírás`, majd
+`chore: iOS build szám 7-re állítása`
 
 ## 2026-09-22 – Igazolások képernyő (S9)
 

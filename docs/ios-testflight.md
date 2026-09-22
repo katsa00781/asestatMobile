@@ -20,7 +20,7 @@ Amit ténylegesen lefuttattam és működik:
 | `npx pod-install` | 110 pod telepítve, `ios/ASEStats.xcworkspace` létrejött |
 | Megosztott séma | `ASEStats` (az Archive-hoz kell) |
 | Bundle identifier | `hu.ase.asestats` (app.json ↔ Xcode egyezik) |
-| Verzió / build | `CFBundleShortVersionString = 1.0.0`, `CFBundleVersion = 1` |
+| Verzió / build | `CFBundleShortVersionString = 1.0.0`, `CFBundleVersion = 7` |
 | Deployment target | iOS 16.4 |
 | Export compliance | `ITSAppUsesNonExemptEncryption = false` → nem kérdez rá a TestFlight |
 | App ikon | 1024×1024, **alfa csatorna nélkül** – App Store Connect elfogadja |
@@ -117,25 +117,36 @@ rm -rf ~/Library/Developer/Xcode/DerivedData/*
 xcrun simctl delete unavailable
 ```
 
-### 5.2 Build number – a második feltöltés előtt kötelező
+### 5.2 Build number – minden feltöltés előtt emelni kell
 
 Az App Store Connect ugyanahhoz a verzióhoz **nem fogad el kétszer azonos build
-számot**. Most `1.0.0 (1)` megy fel. A következő feltöltéshez az `app.json`-be:
+számot**. A korábbi EAS buildek miatt a távoli számláló **6**-on állt
+(`npx eas-cli build:version:get --platform ios`), ezért az `app.json` most
+`"buildNumber": "7"`-et tartalmaz – ez az első szabad szám.
+
+A következő feltöltéshez emeld eggyel:
 
 ```json
 "ios": {
   "bundleIdentifier": "hu.ase.asestats",
-  "buildNumber": "2",
+  "buildNumber": "8",
   ...
 }
 ```
 
-majd `npx expo prebuild --platform ios` és új Archive. (Xcode-ban kézzel is
-átírható, de a következő prebuild felülírja – ezért az `app.json` a mérvadó hely.)
+majd:
 
-Az `eas.json`-ban `appVersionSource: "remote"` áll: ez **csak EAS buildekre**
-vonatkozik. Ha vegyesen buildelsz EAS-szel és lokálisan, a build számokat kézzel
-kell szinkronban tartanod, különben ütköznek.
+```bash
+npx expo prebuild --platform ios && npx pod-install
+```
+
+Az `app.json` a mérvadó hely: Xcode-ban kézzel is átírható a build szám, de a
+következő prebuild felülírja.
+
+> **Ha később megint EAS-szel buildelsz:** az `eas.json`-ban
+> `appVersionSource: "remote"` áll, tehát az EAS a saját (most 6-os) számlálóját
+> használja és lépteti – az ütközne a lokálisan feltöltött 7-tel. Ilyenkor előbb
+> állítsd szinkronba: `npx eas-cli build:version:set --platform ios`.
 
 ### 5.3 A rendszertéma átüt a natív felületeken
 
@@ -200,7 +211,7 @@ indoklással: `UserDefaults` (CA92.1), `FileTimestamp` (C617.1), `SystemBootTime
 | Az app indul, de azonnal „Hiányzó Supabase környezeti változó" | A `.env` hiányzott az Archive-kor. Töltsd ki, **Clean Build Folder**, újra Archive. |
 | `No such module 'ExpoModulesCore'` | A `.xcodeproj`-et nyitottad meg a workspace helyett, vagy hiányzik a `pod install`. |
 | `Sandbox: bash(…) deny file-read` a bundle fázisban | A generált projekt nem állítja az `ENABLE_USER_SCRIPT_SANDBOXING`-ot; ha előjön, a target Build Settingsében állítsd `NO`-ra. |
-| „Redundant binary upload" / build number ütközés | Lásd 5.2 – emeld a `buildNumber`-t. |
+| „Redundant binary upload" / build number ütközés | Lásd 5.2 – emeld az `app.json` `ios.buildNumber` értékét, majd prebuild + új Archive. |
 | Az Archive gomb szürke | A cél nem `Any iOS Device (arm64)`, hanem szimulátor. |
 | Prebuild után eltűnt a Team | `--clean` futott; állítsd be újra a Signing & Capabilities alatt. |
 | Furcsa natív fordítási hiba előzmény nélkül | `rm -rf ios && npx expo prebuild --platform ios && npx pod-install` |
