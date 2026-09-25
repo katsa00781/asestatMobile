@@ -195,6 +195,26 @@ Sablon:
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
 
+## 2026-09-25 – Élő gyűjtő: IPv6 blokk megkerülése (webprojekt)
+
+**Mit:** Az első élő estén (18:20-tól) a `live-scan` megtalálta a két futó
+meccset, de a `netcasting4.webpont.com` az Edge Function IPv6 forráscíméről
+jövő kapcsolatot bontotta (`Connection reset by peer`), így semmi nem került a
+`live_*` táblákba. A saját gépről és a DB `pg_net`-jéből ugyanaz a cím 200-at
+adott. Az első próba (`Deno.createHttpClient({ localAddress: '0.0.0.0' })`)
+hatástalan volt a Supabase Edge-en. A működő megoldás: hálózati hibánál kézi
+IPv4 HTTPS GET (`Deno.connect` az A rekordra + `Deno.startTls` a hostnévvel).
+Webprojekt commit `c0ce8d1`.
+**Fájlok:** `docs/feature-tasks.md` (mobil kód nem változott)
+**Tesztelve:** a 16:34 UTC-s futástól `processed: 2`. A `live_games`-ben
+Szolnok–OSE és Alba–Körmend van, `status: live`, 2026/2027 `season_id`,
+mindkét csapat feloldva. 76 `live_player_lines` és 8 `live_quarter_scores` sor.
+**Nyitva maradt:** A mobil élő kártyát még nem láttam, mert ma nem az
+alapcsapat játszik, és a kártya a kiválasztott csapat meccsét mutatja. Más
+csapatra váltva lehet kipróbálni. Az óra formátuma (növekvő, negyeden belül)
+valós meccsen még ellenőrizendő.
+**Commit:** `docs: élő gyűjtő IPv6 javításának átvezetése`
+
 ## 2026-09-25 – Szezonváltás 2026/2027-re (webprojekt + Supabase)
 
 **Mit:** A Supabase `seasons` táblában az `is_current` átkerült a 2026/2027-es
