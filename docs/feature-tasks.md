@@ -106,8 +106,8 @@
 - [x] `components/LiveGameCard.tsx` – élő kártya a Ma képernyőn
 - [x] `components/LiveScoreCard.tsx`, `app/(tabs)/games/live.tsx` – teljes élő nézet a `games` stackben, nem hatodik tab (D-104)
 - [x] `components/BoxScore.tsx` – `emptyNote` prop, hogy az élő üres box score szövege ne legyen félrevezető
-- [ ] Backend: `live_games` / `live_player_lines` / `live_quarter_scores` tábla + RLS a webprojekt Supabase-ében (külön repó – D-102)
-- [ ] Backend: `live-scan` Edge Function (MKOSZ netcasting JSON forrás) + `pg_cron` ütemezés (külön repó)
+- [x] Backend: `live_games` / `live_player_lines` / `live_quarter_scores` tábla + RLS a webprojekt Supabase-ében (külön repó – D-102)
+- [x] Backend: `live-scan` Edge Function (MKOSZ netcasting JSON forrás) + `pg_cron` ütemezés (külön repó, D-118)
 - [ ] Kézzel feltöltött tesztsorral végigfuttatott UI-teszt: Ma-kártya megjelenés/eltűnés, teljes nézet, hiba, offline, háttérbe/előtérbe váltás
 - [ ] Éles validáció ASE-meccsen (2026-09-25 után) – forrás valódi szerkezete, óra formátuma, csapatnév-egyezés
 
@@ -194,6 +194,29 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-25 – Élő mérkőzés backend élesítése (S8, 2/2)
+
+**Mit:** Ellenőriztem a webprojekt Supabase-ét (`iipcpjczjjkwwifwzmut`). A
+`live_*` táblák és a `live-scan` Edge Function (v4) már élesben voltak, csak a
+`pg_cron` ütemezés hiányzott, ezért a táblák üresek maradtak. Felvettem a
+`live-scan-every-minute` jobot (`* * * * *`, `cron.job` id 2,
+`timeout_milliseconds := 30000`). A Bearer token az anon kulcs (D-118). A
+webprojekt `HOWTO-live-scan.md`-je is frissült (commit `0caa56d`): a fejléc
+eddig azt állította, hogy semmi sincs élesítve.
+**Fájlok:** `docs/feature-tasks.md` (a kód nem változott)
+**Tesztelve:** kézi `curl` hívás → HTTP 200, `liveMatchesFound: 0`. Az első
+cron-futás `succeeded`, a `net._http_response` 200-as, ugyanezzel a törzzsel.
+Élő meccs a teszt idején (16:42) még nem volt, az első ma 18:00-kor kezdődik.
+**Nyitva maradt:** éles validáció a ma esti meccseken (HOWTO 5. pont: óra,
+csapatnév-egyezés, `/elo` HTML-szerkezet). **Szezon-eltérés:** az
+`is_current` még a 2025/2026-os szezonon áll (a 2026/2027-es létezik, de nem
+aktuális), a gyűjtő ezért a 2025/2026 `season_id`-val ír. A mobil a
+`selectedSeasonId` szerint szűr, így az élő kártya csak akkor látszik, ha a
+szűrőben a 2025/2026 szezon van kiválasztva. Az `is_current` átállítása a
+webprojekt szezonváltási feladata (`HOWTO-uj-szezon.md`), nem ennek a
+feladatnak a része.
+**Commit:** `chore: élő mérkőzés backend élesítésének átvezetése`
 
 ## 2026-09-22 – iOS TestFlight build leírás és alkalmassági ellenőrzés
 
@@ -4786,3 +4809,23 @@ a NativeWind nem képez le `className`-t (a css-interop csak a `FlatList`-et és
 **Alternatíva:** Közös `ScrollView` mindkét szegmensnek – elvetve a fenti két ok
 miatt.
 **Visszavonható?** Igen, kis lista mellett `ScrollView`-ra cserélhető.
+
+## D-118 – A `live-scan` cron jobja az anon kulccsal hív, nem a service role kulccsal
+**Dátum:** 2026-09-25
+**Döntés:** A `pg_cron` → `net.http_post` hívás `Authorization` fejlécében a
+projekt publikus (legacy, JWT) anon kulcsa szerepel. A HOWTO eredetileg a
+service role kulcsot írta elő.
+**Miért:** A `verify_jwt` csak azt nézi, hogy a JWT érvényes-e, a szerepkört
+nem. A `live-scan` a hívó tokenjét nem használja, az íráshoz a
+platform-injektált `SUPABASE_SERVICE_ROLE_KEY`-t veszi. Így az anon kulccsal
+ugyanúgy működik, és a service role kulcs nem kerül bele a `cron.job` tábla
+olvasható parancsszövegébe. Az anon kulcs a mobil bundle-ben amúgy is
+publikus. A service role kulcs az MCP-n keresztül nem is elérhető.
+**Következmény:** a függvényt bárki meghívhatja, akinél az anon kulcs megvan.
+Ez eddig is így volt, a futás idempotens, és a forrás felé a percenkénti
+ütemnél nem kér gyakrabban.
+**Alternatíva:** service role kulcs a Vaultban (`vault.decrypted_secrets`),
+azzal hívna a job. Elvetve, mert a jogosultsági kép nem változna tőle. Ha
+valaha kell, a függvény elejére kerül egy explicit role-ellenőrzés.
+**Visszavonható?** Igen: `cron.unschedule('live-scan-every-minute')`, majd új
+job más tokennel.
