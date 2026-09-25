@@ -195,6 +195,29 @@ Sablon:
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
 
+## 2026-09-25 – Szezonváltás 2026/2027-re (webprojekt + Supabase)
+
+**Mit:** A Supabase `seasons` táblában az `is_current` átkerült a 2026/2027-es
+szezonra (egy `UPDATE`-ben, hogy egy pillanatig se legyen két aktuális
+szezon). Előtte ellenőriztem a 2026/2027 SQL-oldalát: a
+`player_game_stats_2026_2027` tábla, az RLS (ugyanaz, mint a 2025/2026-osé),
+a `player_game_stats` UNION view és a három `route_pgs_*` trigger mind
+tartalmazza. A webprojekt importálóinak tartalék értékei (`x2627` / `2627` /
+`2026/2027`) átírva (webprojekt commit `ab27371`). Így a ma esti élő meccs és
+a későbbi importok is a 2026/2027-be kerülnek. Ez felváltja az előző
+bejegyzés „szezon-eltérés” pontját.
+**Fájlok:** `docs/feature-tasks.md` (mobil kód nem változott)
+**Tesztelve:** `live-scan` kézi hívás az átállás után →
+`seasonId: 3152809d-…` (2026/2027). A hunbasket.hu `x2627` menetrend-oldala
+HTTP 200.
+**Nyitva maradt:** A GitHub Actions repo variables (`HUNBASKET_SEASON_*`,
+`KOSARSTAT_SEASON_*`) állapotát nem tudtam ellenőrizni, mert a `gh` nem volt
+bejelentkezve. Ha régi értékkel be vannak állítva, felülírják az új tartalék
+értéket. A mobil app megtartja a perzisztált `selectedSeasonId`-t: akinél a
+2025/2026 van elmentve, annál nem vált át magától, a szűrőben kézzel kell
+2026/2027-re állítani.
+**Commit:** `docs: szezonváltás 2026/2027-re átvezetése`
+
 ## 2026-09-25 – Élő mérkőzés backend élesítése (S8, 2/2)
 
 **Mit:** Ellenőriztem a webprojekt Supabase-ét (`iipcpjczjjkwwifwzmut`). A
