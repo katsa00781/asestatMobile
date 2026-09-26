@@ -162,6 +162,8 @@ előkészítve."), nem általános hálózati hibaként.
 
 - [x] `games.opponent_team_id` (migráció + írók + olvasók, három jegyzet): az
       ellenfél azonosítása ID alapján, név csak ID nélküli sorra (D-119)
+- [x] Duplikált Szolnok csapatsor összevonása: a törölt csapat-id tárolt
+      szűrőből alapcsapatra esik vissza – kódváltozás nem kellett
 
 ---
 
@@ -204,6 +206,28 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-26 – Duplikált Szolnok csapatsor összevonása (web → mobil szinkron)
+
+**Mit:** A webprojekt `szolnok-team-merge` jegyzete szerint a `teams`-ből
+törlődött a `Szolnoki Olajbányász` sor (`f9b17624-…`), minden hivatkozása az
+`NHSZ-Szolnoki Olajbányász`-ra került. A kérdés az volt, mi történik, ha a
+perzisztált `selectedTeamId` a törölt id. Ezt a `useFilterData` effectje már
+kezeli: ha a tárolt id nincs a friss `teams` listában, az alapcsapatra állít
+(D-013). Az AsyncStorage-ban csak a `filterStore` tárol csapat-id-t (és a
+Supabase session), más perzisztált hivatkozás nincs. Kódváltozás nem kellett.
+**Fájlok:** `docs/feature-tasks.md`
+**Tesztelve:** kódátnézés (`store/filterStore.ts`, `hooks/useFilterData.ts`,
+minden `useCachedQuery` kulcs). SQL: a törölt id-hoz 0 `teams` sor és 0
+`games` hivatkozás (`our_team_id` / `opponent_team_id`) tartozik, Szolnok
+néven egyetlen csapat maradt. Eszközön nem futtattam.
+**Nyitva maradt:** A `usePlayerData` kulcsa csak a `hydrated`-et várja, a
+csapatlistát nem. Törölt id esetén így egyszer lefut egy üres lekérdezés,
+mielőtt a store alapcsapatra vált. Rossz adat nem jelenik meg, mert utána
+a kulcs is vált. Ha egy futó app a törlés előtt töltötte be a
+csapatlistát, a memóriacache-ben a régi csapat újraindításig választható
+marad, de üres adatot ad.
+**Commit:** `docs: Szolnok csapatsor összevonásának átvezetése`
 
 ## 2026-09-26 – Ellenfél azonosítása `opponent_team_id` alapján (web → mobil szinkron)
 
