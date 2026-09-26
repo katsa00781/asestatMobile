@@ -108,6 +108,8 @@
 - [x] `components/BoxScore.tsx` – `emptyNote` prop, hogy az élő üres box score szövege ne legyen félrevezető
 - [x] Backend: `live_games` / `live_player_lines` / `live_quarter_scores` tábla + RLS a webprojekt Supabase-ében (külön repó – D-102)
 - [x] Backend: `live-scan` Edge Function (MKOSZ netcasting JSON forrás) + `pg_cron` ütemezés (külön repó, D-118)
+- [x] Meccsstatisztika szekció a teljes élő nézetben (`live_team_stats`, saját vs.
+      ellenfél, `SplitMetricRow`) – hiányzó táblánál üres állapot, nem hiba (D-121)
 - [ ] Kézzel feltöltött tesztsorral végigfuttatott UI-teszt: Ma-kártya megjelenés/eltűnés, teljes nézet, hiba, offline, háttérbe/előtérbe váltás
 - [ ] Éles validáció ASE-meccsen (2026-09-25 után) – forrás valódi szerkezete, óra formátuma, csapatnév-egyezés
 
@@ -213,6 +215,36 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-26 – Élő meccsstatisztika (`live_team_stats`, web → mobil szinkron)
+
+**Mit:** A webprojekt `live-team-stats` jegyzete szerint a `live-scan` egy új
+`live_team_stats` táblába oldalanként teljes csapatösszesítőt ír, a
+csapatszintű eseményekkel együtt. A teljes élő nézet a Negyedek és a Box
+score között új „Meccsstatisztika” szekciót kapott: Mezőny %, Kettes %,
+Hármas %, Büntető %, Lepattanó, Szerzett labda, Eladott labda, Assziszt,
+Fault, Kiharcolt fault, Értékelés, saját (cián) kontra ellenfél (narancs). A
+`useLiveGame` `fetchLiveDetails()` harmadik párhuzamos lekérdezést futtat,
+a `toTeamStats()` a `team_side` + `homeAway` alapján választ oldalt. Fél
+párost nem mutat. A 2P a `close_* + mid_*` összege, mint a box score-ban.
+**Fájlok:** `types/live.ts`, `hooks/useLiveGame.ts`, `lib/live-view.ts` (új),
+`components/LiveTeamStatsPanel.tsx` (új), `app/(tabs)/games/live.tsx`,
+`docs/feature-tasks.md`
+**Tesztelve:** `npx tsc --noEmit`, `npm run lint` hibátlan. A PostgREST a
+még nem létező táblára élesben `42P01`-et ad. Ezt a hook hiányzó táblaként
+kezeli, a szekció magyarázó sort mutat, a nézet többi része működik. A
+valódi `toTeamStats` és `buildLiveTeamMetrics` kódját scratchpad-szkript
+futtatta: egyoldalú és üres válasz → `null`; vendégoldali saját csapatnál
+helyes oldalválasztás, százalékok (22/52 → 42.3) és „jobb oldal” jelölés
+(eladott labda, fault fordítva). **Eszközön nem néztem meg**: a tábla még
+nem létezik, és élő meccs sincs (`live_games` üres).
+**Nyitva maradt:** A webprojekt két kézi lépése: a migráció, utána a
+`live-scan` deploy. Az első valódi adatos futásnál ellenőrizni kell a
+szekció megjelenését iOS-en és Androidon, főleg a hosszú ellenfélnév
+levágását a névsorban. A `SplitMetricRow`-hoz tartozó metrika-építő
+(`toMetric` / `betterSide`) most harmadszor szerepel (Szituációk, Scouting,
+élő). Közös helperbe emelése külön refaktor lehet.
+**Commit:** `feat: élő meccsstatisztika szekció`
 
 ## 2026-09-26 – Tabella: csapat feloldása `team_id` alapján (mobil olvasó)
 
@@ -5035,3 +5067,24 @@ meccs nélküli szezonban (2026/2027 eleje) nem működik; (d) marad a nyers
 forrásnév – a rövid név és a rövidítés elveszik az érintett soroknál.
 **Visszavonható?** Igen, a `hooks/useStandings.ts` `toTeams`-e. A mező a JSON-ban
 ártalmatlan, ha nem olvassa semmi.
+
+## D-121 – Élő meccsstatisztika: meglévő `SplitMetricRow`, hiányzó tábla = üres állapot
+**Dátum:** 2026-09-26
+**Döntés:** (1) A szekció nem kapott saját makettet. A Szituációk és a
+Scouting jóváhagyott `SplitMetricRow` sorait használja, fölöttük egy
+cián/narancs névsorral (új token nélkül), a Negyedek és a Box score között.
+(2) Ha a `live_team_stats` lekérdezés hiányzó táblát jelez (`42P01` /
+`PGRST205`), a csapatstatisztika `null`, és a szekció magyarázó sort mutat.
+Minden más hiba továbbra is az egész nézet hibapanelje.
+**Miért:** A saját vs. ellenfél összevetésre az app már egy elfogadott
+mintát használ, és az élő nézetben is ugyanaz a színkód (saját cián,
+ellenfél narancs). A tábla migrációja és a gyűjtő deployja a webprojekt kézi
+lépése, a mobil build ezeknél korábban is kimehet. Egy kiegészítő szekció
+hiánya nem teheti használhatatlanná az élő állást és a box score-t.
+**Alternatíva:** (a) külön P-prompt és makett a szekcióhoz – lassabb, és a
+netcasting panelje is ugyanezt a két oldalas sort mutatja; (b) a táblát csak
+a migráció után lekérdezni (feature flag) – plusz konfiguráció, pedig a
+hibakód egyértelmű; (c) `StatMatrix` két sorral – 11 oszlopnál vízszintes
+görgetés kellene, a saját–ellenfél összevetés rosszabbul olvasható.
+**Visszavonható?** Igen: `components/LiveTeamStatsPanel.tsx` és a
+`fetchLiveDetails()` harmadik lekérdezése.

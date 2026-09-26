@@ -1,6 +1,6 @@
 /**
- * Élő mérkőzés – a `live_games`, `live_player_lines` és `live_quarter_scores`
- * táblák leszűkített, kliensoldali alakja.
+ * Élő mérkőzés – a `live_games`, `live_player_lines`, `live_quarter_scores` és
+ * `live_team_stats` táblák leszűkített, kliensoldali alakja.
  *
  * A séma tudatosan a meglévő `PlayerGameLine` és `QuarterScore` oszlopneveit
  * követi, hogy a `hooks/useLiveGame.ts` mapperei a `hooks/useGameDetails.ts`
@@ -27,8 +27,31 @@ export interface LiveGameSummary {
   updatedAt: string;
 }
 
+/**
+ * Egy csapat teljes meccsstatisztikája (`live_team_stats`). A csapatszintű
+ * eseményeket (csapat-lepattanó, csapat-labdaeladás) is tartalmazza, ezért
+ * **nem** egyenlő a box score sorainak összegével.
+ */
+export interface LiveTeamStats {
+  twoMade: number;
+  twoAttempted: number;
+  threeMade: number;
+  threeAttempted: number;
+  freeThrowMade: number;
+  freeThrowAttempted: number;
+  rebounds: number;
+  assists: number;
+  steals: number;
+  turnovers: number;
+  fouls: number;
+  foulsDrawn: number;
+  valuation: number;
+}
+
 /** A teljes élő nézethez: az összefoglaló mellett box score és negyedek is. */
 export interface LiveGameDetails extends LiveGameSummary {
   boxScore: PlayerGameLine[];
   quarters: QuarterScore[];
+  /** Saját és ellenfél csapatstatisztika – `null`, amíg nincs meg mindkét oldal. */
+  teamStats: { own: LiveTeamStats; opponent: LiveTeamStats } | null;
 }

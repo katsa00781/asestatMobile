@@ -1,6 +1,6 @@
 /**
- * Élő mérkőzés – a `live_games`, `live_player_lines` és `live_quarter_scores`
- * táblák periodikus lekérdezése.
+ * Élő mérkőzés – a `live_games`, `live_player_lines`, `live_quarter_scores` és
+ * `live_team_stats` táblák periodikus lekérdezése.
  *
  * Ez **nem** a `useCachedQuery` mintáját követi: az a hook TTL nélküli,
  * „egyszer töltünk" cache-re épül (`lib/query-cache.ts`, D-026), ami élő
@@ -27,12 +27,19 @@ import { describeError } from '@/hooks/useCachedQuery';
 import { supabase } from '@/lib/supabase';
 import { useFilterStore } from '@/store/filterStore';
 import type { HomeAway, PlayerGameLine, QuarterScore } from '@/types/games';
-import type { LiveGameDetails, LiveGameSummary, LiveStatus } from '@/types/live';
+import type { LiveGameDetails, LiveGameSummary, LiveStatus, LiveTeamStats } from '@/types/live';
 
 /** A Ma-kártya csak az állást kéri – ritkábban, mert kevesebb a tartalom. */
 const POLL_MS_CARD = 60_000;
 /** A teljes nézet box score-t és negyedeket is kér. */
 const POLL_MS_FULL = 20_000;
+
+/**
+ * A hiányzó tábla PostgREST- és Postgres-hibakódja. A `live_team_stats`
+ * migrációja a webprojekt kézi lépése – amíg nem futott le, a csapatstatisztika
+ * üres, de a nézet többi része működik (D-121).
+ */
+const MISSING_TABLE_CODES = ['PGRST205', '42P01'];
 
 /** Ezekben az állapotokban van értelme továbbfrissíteni. */
 const ACTIVE_STATUSES: LiveStatus[] = ['live', 'halftime'];
@@ -181,7 +188,7 @@ async function fetchLiveDetails(seasonId: string, teamId: string): Promise<LiveG
   const summary = await fetchLiveSummary(seasonId, teamId);
   if (!summary) return null;
 
-  const [linesResult, quarterResult] = await Promise.all([
+  const [linesResult, quarterResult, teamStatsResult] = await Promise.all([
     supabase
       .from('live_player_lines')
       .select(
@@ -197,15 +204,28 @@ async function fetchLiveDetails(seasonId: string, teamId: string): Promise<LiveG
       .select('team_side, quarter, points, cumulative_points')
       .eq('live_game_id', summary.id)
       .order('quarter', { ascending: true }),
+    supabase
+      .from('live_team_stats')
+      .select(
+        'team_side, close_made, close_attempted, mid_made, mid_attempted, three_made, ' +
+          'three_attempted, free_throw_made, free_throw_attempted, total_rebounds, assists, ' +
+          'steals, turnovers, fouls_committed, fouls_drawn, valuation',
+      )
+      .eq('live_game_id', summary.id),
   ]);
 
   if (linesResult.error) throw new Error(linesResult.error.message);
   if (quarterResult.error) throw new Error(quarterResult.error.message);
 
+  const teamStatsMissing =
+    teamStatsResult.error !== null && MISSING_TABLE_CODES.includes(teamStatsResult.error.code);
+  if (teamStatsResult.error && !teamStatsMissing) throw new Error(teamStatsResult.error.message);
+
   return {
     ...summary,
     boxScore: toBoxScore(linesResult.data, summary.homeAway),
     quarters: toQuarters(quarterResult.data, summary.homeAway),
+    teamStats: teamStatsMissing ? null : toTeamStats(teamStatsResult.data, summary.homeAway),
   };
 }
 
@@ -328,4 +348,42 @@ function toQuarters(rows: unknown, homeAway: HomeAway): QuarterScore[] {
     ourPoints: ourPoints.get(quarter) ?? 0,
     oppPoints: oppPoints.get(quarter) ?? 0,
   }));
+}
+
+/** A `team_side` alapján saját és ellenfél oldal; fél párost nem mutatunk. */
+function toTeamStats(
+  rows: unknown,
+  homeAway: HomeAway,
+): { own: LiveTeamStats; opponent: LiveTeamStats } | null {
+  if (!Array.isArray(rows)) return null;
+
+  let own: LiveTeamStats | null = null;
+  let opponent: LiveTeamStats | null = null;
+
+  for (const row of rows as unknown[]) {
+    if (!isRecord(row)) continue;
+    if (row.team_side === homeAway) own = toTeamStatsRow(row);
+    else if (row.team_side === 'home' || row.team_side === 'away') opponent = toTeamStatsRow(row);
+  }
+
+  return own && opponent ? { own, opponent } : null;
+}
+
+function toTeamStatsRow(row: Record<string, unknown>): LiveTeamStats {
+  return {
+    // A 2P a közeli és a középtávoli dobások összege, ahogy a `toBoxScore()`-ban.
+    twoMade: toNumber(row.close_made) + toNumber(row.mid_made),
+    twoAttempted: toNumber(row.close_attempted) + toNumber(row.mid_attempted),
+    threeMade: toNumber(row.three_made),
+    threeAttempted: toNumber(row.three_attempted),
+    freeThrowMade: toNumber(row.free_throw_made),
+    freeThrowAttempted: toNumber(row.free_throw_attempted),
+    rebounds: toNumber(row.total_rebounds),
+    assists: toNumber(row.assists),
+    steals: toNumber(row.steals),
+    turnovers: toNumber(row.turnovers),
+    fouls: toNumber(row.fouls_committed),
+    foulsDrawn: toNumber(row.fouls_drawn),
+    valuation: toNumber(row.valuation),
+  };
 }

@@ -1,5 +1,6 @@
 /**
- * Élő mérkőzés – állás, negyedek, box score, meccs közben frissülő adatokkal.
+ * Élő mérkőzés – állás, negyedek, meccsstatisztika, box score, meccs közben
+ * frissülő adatokkal.
  *
  * A `games` stack-ben él, nem hatodik tab: így megkapja a `BackHeader`
  * mintáját és az Expo Router swipe-back / Android back viselkedését (D-104).
@@ -15,6 +16,7 @@ import { BoxScore } from '@/components/BoxScore';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorPanel } from '@/components/ErrorPanel';
 import { LiveScoreCard } from '@/components/LiveScoreCard';
+import { LiveTeamStatsPanel } from '@/components/LiveTeamStatsPanel';
 import { QuarterScores } from '@/components/QuarterScores';
 import { SectionLabel } from '@/components/SectionLabel';
 import { SkeletonBlock } from '@/components/SkeletonBlock';
@@ -50,6 +52,9 @@ export default function LiveGameScreen() {
           <SectionLabel label="Negyedek" style={styles.section} />
           <QuarterScores quarters={live.quarters} ourName={ourName} opponent={live.opponent} />
 
+          <SectionLabel label="Meccsstatisztika" style={styles.section} />
+          <LiveTeamStatsPanel stats={live.teamStats} ourName={ourName} opponent={live.opponent} />
+
           <SectionLabel label="Box score" style={styles.section} />
           <BoxScore lines={live.boxScore} emptyNote="A statisztika a meccs közben még nem elérhető." />
         </>
@@ -73,6 +78,8 @@ function LiveSkeleton() {
       <SkeletonBlock height={168} corner="xl" style={styles.skeletonCard} />
       <SkeletonBlock height={11} width="30%" style={styles.skeletonLabel} />
       <SkeletonBlock height={98} corner="lg" style={styles.skeletonCard} />
+      <SkeletonBlock height={11} width="30%" style={styles.skeletonLabel} />
+      <SkeletonBlock height={200} corner="lg" style={styles.skeletonCard} />
       <SkeletonBlock height={11} width="30%" style={styles.skeletonLabel} />
       <SkeletonBlock height={200} corner="lg" />
     </View>
