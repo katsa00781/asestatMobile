@@ -170,6 +170,13 @@ előkészítve."), nem általános hálózati hibaként.
       régi név nincs a kódban
 - [x] Tabella: a `standings.data` sorait a `team_id` köti csapathoz, a név csak
       az ID nélküli sorra tartalék – mobil olvasó kész (D-120)
+- [x] Post-game elemzés (`@core/postgame-report` + kosarstat-kiegészítés):
+      `games/[id]/postgame` alroute, a meccs részleteiről `NavRow` nyitja (D-122)
+- [ ] Post-game, **webprojekt**: SELECT policy a `player_game_text_reports`-ra az
+      `authenticated` szerepkörnek – RLS be van kapcsolva, policy nincs, így a
+      mentett játékos-szöveg sem a weben, sem a mobilon nem olvasható
+- [ ] Post-game: eszközön (iOS + Android) végignézni, és egy kosarstat-importos
+      meccsen összevetni a webes Post-game nézettel (spec 6. pont)
 - [ ] Tabella, **webprojekt**: a tabella-import írja be a `team_id`-t a
       `standings.data` soraiba + a meglévő sorok visszatöltése. Amíg nincs meg,
       a 2025/2026-os tabellában 4, a 2026/2027-esben 2 sor a nyers forrásnévvel látszik
@@ -215,6 +222,68 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-26 – Post-game elemzés (web → mobil szinkron)
+
+**Mit:** A webprojekt két jegyzete (`postgame-analysis-spec`,
+`postgame-kosarstat-core`) alapján a meccs részletei alá került egy
+számított post-game elemzés. A képernyő a `games/[id]/postgame` alroute, a
+részletek „Elemzés” szekciójából egy `NavRow` nyitja. Ehhez a
+`games/[id].tsx` átkerült a `games/[id]/index.tsx`-be, az URL nem változott.
+A számítás a `@core/postgame-report` `analyzePostGameReport`-ja, utána a
+`mergeKosarstatPostgameContext`, a webbel azonos bemenetekkel:
+- saját és ellenfél box score (az ellenfél `games` sora `opponent_team_id` +
+  dátum alapján, D-119);
+- a liga szezonmezőnye és a benchmark a `useTeamSeasonData` cache-éből;
+- kosarstat negyed- és csapatmetrika-sorok, a clutch a `useGameDetails`
+  cache-éből;
+- Hunbasket dobástérkép, a szezonos dobások szűrőpáronként cache-elve.
+
+A képernyő szekciói: Összegzés, KPI-csempék, kulcsmutatók (meccs / szezon /
+eltérés, ligamedián), dobásprofil, dobástérkép (arányok, hatékonyság,
+zónatábla), döntő tényezők tengely + típus szerint, játékos hatás, három
+kiemelt játékos, kinyitható játékoslista, erősségek / problémák / következő
+fókusz. Az `@core` szinkron külön commitban ment be (`db3e409`).
+**Fájlok:** `app/(tabs)/games/[id]/index.tsx` (áthelyezve + `NavRow`),
+`app/(tabs)/games/[id]/postgame.tsx` (új), `hooks/usePostgameAnalysis.ts` (új),
+`lib/postgame-data.ts` (új), `lib/postgame-view.ts` (új), `types/postgame.ts`
+(új), `components/PostgamePanel.tsx`, `components/PostgamePlayerCard.tsx`,
+`components/DecisiveFactorList.tsx` (új), `docs/feature-tasks.md`
+**Tesztelve:**
+- `npx tsc --noEmit`, `npm run lint` hibátlan. `npx expo export --platform
+  ios --platform android` lefut, mindkét Hermes bundle elkészül.
+- A valódi `lib/postgame-data` + `lib/team-season-stats` + `lib/postgame-view`
+  láncot scratchpad-harness futtatta élő adaton, anon klienssel, két ASE
+  meccsen:
+  - 2026-05-20, Kaposvár, 83:85: kosarstat 8/2 sor, ellenfél box score
+    10 sor, dobástérkép 67 / szezon 3516 dobás;
+  - 2026-02-22, a régi nevű Honvéd, 92:89: kosarstat és dobástérkép nélkül,
+    az ellenfél box score (13 sor) az ID-párosítással megvan.
+- Mindkettőn teljes riport áll elő. A kulcsmutatók, a döntő tényezők és a
+  kosarstat-megjegyzések értelmesek, `→`/`≈` nem maradt a szövegben.
+- A kaposvári meccsen a kiemelt játékosok és a játékos hatás üres. Ez a
+  `@core` küszöbeiből jön (impactScore max 45, az MVP-küszöb 60–68), nem
+  bemeneti hibából.
+- Az első futásnál a dobástérkép átmeneti hálózati hiba miatt maradt ki, és a
+  kód ezt a spec szerint üres szekcióként kezelte. Az újrafutás hozta.
+
+**Eszközön és szimulátoron nem néztem meg** (ezen a gépen nincs szimulátor),
+és a webes nézettel sem vetettem össze a számokat.
+**Nyitva maradt:**
+- `player_game_text_reports`: az RLS be van kapcsolva, de SELECT policy
+  nincs, így a bejelentkezett felhasználó 0 sort kap. A táblában 10 sor van.
+  A jegyzet azt állítja, hogy az RLS engedi, de ez nem igaz, és a web
+  `GameDetails.tsx` is ugyanígy üreset lát. A mobil olvasás kész, a policy a
+  webprojekt migrációja.
+- A spec szerint a v1-ből kimarad: X-faktor visszatükrözés, dobás-szórásdiagram,
+  hőtérkép, lineup-elemzés, Usage–TS buborék.
+- A `Δ` (U+0394) nincs a Barlow Condensedben, ezért a fejléc „Elt. pp”.
+- A kulcsmutatók felirata az app meglévő szóhasználatát követi (Assziszt
+  arány, Büntetőráta), nem a jegyzet „Gólpassz%” javaslatát.
+- Egyik `teams` soron sincs `is_primary`, az alapcsapatot továbbra is a
+  D-013 névtartaléka választja.
+
+**Commit:** `feat: post-game elemzés a meccs részletein`
 
 ## 2026-09-26 – Élő meccsstatisztika (`live_team_stats`, web → mobil szinkron)
 
@@ -5088,3 +5157,38 @@ hibakód egyértelmű; (c) `StatMatrix` két sorral – 11 oszlopnál vízszinte
 görgetés kellene, a saját–ellenfél összevetés rosszabbul olvasható.
 **Visszavonható?** Igen: `components/LiveTeamStatsPanel.tsx` és a
 `fetchLiveDetails()` harmadik lekérdezése.
+
+## D-122 – Post-game elemzés külön alroute-on, a webes jegyzet mint specifikáció
+**Dátum:** 2026-09-26
+**Döntés:**
+1. Az elemzés külön képernyő (`games/[id]/postgame`), a meccs részleteiről
+   `NavRow` nyitja.
+2. Makett nincs. A webes spec jegyzet a specifikáció, és minden szekció
+   meglévő komponensből épül: `InsightCard`, `StatTile`, `StackedRow`,
+   `MeterList`, `StatList`, `StatMatrix`, `PointList`, `GlowCard`, `Badge`,
+   `ReportCard`. Új design token nincs. Két új komponens van, mindkettő
+   ezekből összerakva: `DecisiveFactorList` (tételenkénti ▲/▼ hangnem) és
+   `PostgamePlayerCard` (kinyitható sor).
+3. Az adatréteg a `lib/postgame-data`-ban van, a hook vékony, ahogy a
+   `lib/team-season-stats`-nál (D-086).
+4. A dobástérkép és a mentett játékos-szöveg hibája nem hibapanel, hanem
+   üres szekció.
+5. A `@core` szabályalapú szövegei nem kapnak AI-jelölést. Lila `ReportCard`
+   csak a weben mentett LLM-szöveget jelöli.
+
+A hely és a design módja felhasználói döntés (2026-09-26).
+**Miért:** Az elemzés hosszú, és a liga szezonmezőnyét is betölti. A
+részletek képernyőn ez minden meccsmegnyitást lassítana. A spec jegyzet
+szekcióról szekcióra leírja a tartalmat és a hangnemeket, ezért egy külön P16
+prompt és makett csak késleltetne, új vizuális elemet nem hozna. A tiszta
+adatmodul miatt a lánc élő adaton, a képernyő nélkül is ellenőrizhető volt.
+**Alternatíva:**
+- (a) szekció a meccs részletein: túl hosszú lenne, és a liga-betöltés
+  minden megnyitáskor lefutna;
+- (b) előbb P16 design prompt és makett;
+- (c) az adatlogika a hookban: nem futtatható hálózati méréssel;
+- (d) a dobástérkép hibája hibapanel: egy kiegészítő adat elvinné az egész
+  elemzést.
+
+**Visszavonható?** Igen: a `postgame.tsx` és a `NavRow` eltávolításával. Az
+`[id]/index.tsx` áthelyezés URL-t nem változtatott.

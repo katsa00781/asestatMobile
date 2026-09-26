@@ -9,7 +9,7 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { CalendarX } from 'lucide-react-native';
+import { CalendarX, ChartColumnBig } from 'lucide-react-native';
 
 import { BackHeader } from '@/components/BackHeader';
 import { BoxScore } from '@/components/BoxScore';
@@ -19,6 +19,7 @@ import { ErrorPanel } from '@/components/ErrorPanel';
 import { GameFourFactorsChart } from '@/components/GameFourFactorsChart';
 import { GameMomentumChart } from '@/components/GameMomentumChart';
 import { GameScoreCard } from '@/components/GameScoreCard';
+import { NavRow } from '@/components/NavRow';
 import { QuarterScores } from '@/components/QuarterScores';
 import { ReportCard } from '@/components/ReportCard';
 import { SectionLabel } from '@/components/SectionLabel';
@@ -71,6 +72,14 @@ export default function GameDetailsScreen() {
           <ClutchPanel clutch={clutch} ourName={ourName} opponent={game.opponent} />
 
           <SectionLabel label="Elemzés" style={styles.section} />
+          <NavRow
+            icon={ChartColumnBig}
+            title="Post-game elemzés"
+            description="Döntő tényezők, kulcsmutatók, játékosok"
+            tone="cyan"
+            onPress={() => router.push(`/games/${game.id}/postgame`)}
+            style={styles.navRow}
+          />
           {reports.length > 0 ? (
             reports.map((report) => <ReportCard key={report.id} report={report} />)
           ) : (
@@ -112,6 +121,10 @@ const styles = StyleSheet.create({
   },
   note: {
     marginHorizontal: spacing[4],
+  },
+  navRow: {
+    marginHorizontal: spacing[4],
+    marginBottom: spacing[2],
   },
   skeleton: {
     paddingHorizontal: spacing[4],
