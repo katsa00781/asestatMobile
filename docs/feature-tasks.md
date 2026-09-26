@@ -164,6 +164,10 @@ előkészítve."), nem általános hálózati hibaként.
       ellenfél azonosítása ID alapján, név csak ID nélküli sorra (D-119)
 - [x] Duplikált Szolnok csapatsor összevonása: a törölt csapat-id tárolt
       szűrőből alapcsapatra esik vissza – kódváltozás nem kellett
+- [x] Három csapat átnevezése (szponzornevek): előfeltétel kész, hardcode-olt
+      régi név nincs a kódban
+- [ ] Tabella: a `standings.data` régi forrásneveinek feloldása csapatra
+      (az átnevezés óta 2025/2026-ban 4, 2026/2027-ben 2 sor nem talál párt) – döntésre vár
 
 ---
 
@@ -206,6 +210,30 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-26 – Három csapat átnevezése a 2026/2027-es nevekre (web → mobil szinkron)
+
+**Mit:** A webprojekt `teams-sponsor-rename` jegyzete: `MVM-OSE Lions` →
+`OSE Lions`, `SZTE-Szedeák` → `Délút-SZTE-Szedeák`, `Falco-Vulcano Energia
+KC Szombathely` → `Falco KC Szombathely` (id és `short_name` változatlan). Az
+átnevező SQL élesben már lefutott (ellenőrizve). A jegyzet két teendője
+teljesült: az előfeltétel `opponent_team_id` átállás megvan (D-119), és
+hardcode-olt régi név nincs a mobil kódban. Kódváltozás nem kellett.
+**Fájlok:** `docs/feature-tasks.md`
+**Tesztelve:** `grep` a régi nevekre a teljes kódban (`core/` nélkül). SQL: a
+három `teams` sor az új nevet viseli. SQL: a szezonok legfrissebb
+`standings.data` tömbjében mely nevek nem egyeznek egy `teams.name`-mel sem.
+**Nyitva maradt – új találat, a jegyzeten kívül:** A Tabella
+(`hooks/useStandings.ts`) a `standings.data` scrapelt csapatnevét név szerint
+köti a `teams` sorhoz. Az átnevezés óta a 2025/2026-os tabellában 4 sor nem
+talál párt (a három átnevezett klub régi neve, plusz az `Endo Plus
+Service-Honvéd`, amely már korábban sem talált), a 2026/2027-esben 2 (`MVM-OSE
+Lions`, `Endo Plus Service-Honvéd`), mert a forrás az új szezonban is a régi
+nevet adja. Ezek a sorok a nyers, hosszú forrásnévvel és abból számolt
+rövidítéssel jelennek meg a rövid név helyett. A saját csapat kiemelése nem
+sérül, és a web `StandingsView` is a nyers nevet mutatja. A javítás módja
+döntésre vár.
+**Commit:** `docs: csapat-átnevezés átvezetése`
 
 ## 2026-09-26 – Duplikált Szolnok csapatsor összevonása (web → mobil szinkron)
 
