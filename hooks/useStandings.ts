@@ -126,6 +126,7 @@ function toTable(row: unknown, teams: Team[]): StandingsTable | null {
 }
 
 function toTeams(rows: unknown[], teams: Team[]): StandingsTeam[] {
+  const byId = new Map(teams.map((team) => [team.id, team]));
   const byName = new Map(teams.map((team) => [normalizeText(team.name), team]));
   // A legfrissebb importban minden csapat kétszer szerepel, azonos értékekkel:
   // helyezésenként az elsőt tartjuk meg (D-057).
@@ -138,7 +139,13 @@ function toTeams(rows: unknown[], teams: Team[]): StandingsTeam[] {
     if (position <= 0 || seen.has(position)) return [];
     seen.add(position);
 
-    const team = byName.get(normalizeText(row.team)) ?? null;
+    // A csapatot a webes import által beírt `team_id` köti; a scrapelt név a
+    // forrás pillanatképe, klub-átnevezés után már nem egyezik a `teams.name`-mel.
+    // Név szerint csak az ID nélküli (régi) sorokat oldjuk fel (D-120).
+    const team =
+      typeof row.team_id === 'string'
+        ? (byId.get(row.team_id) ?? null)
+        : (byName.get(normalizeText(row.team)) ?? null);
     const scored = toInteger(row.scored);
     const conceded = toInteger(row.conceded);
 

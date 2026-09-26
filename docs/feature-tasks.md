@@ -166,8 +166,11 @@ előkészítve."), nem általános hálózati hibaként.
       szűrőből alapcsapatra esik vissza – kódváltozás nem kellett
 - [x] Három csapat átnevezése (szponzornevek): előfeltétel kész, hardcode-olt
       régi név nincs a kódban
-- [ ] Tabella: a `standings.data` régi forrásneveinek feloldása csapatra
-      (az átnevezés óta 2025/2026-ban 4, 2026/2027-ben 2 sor nem talál párt) – döntésre vár
+- [x] Tabella: a `standings.data` sorait a `team_id` köti csapathoz, a név csak
+      az ID nélküli sorra tartalék – mobil olvasó kész (D-120)
+- [ ] Tabella, **webprojekt**: a tabella-import írja be a `team_id`-t a
+      `standings.data` soraiba + a meglévő sorok visszatöltése. Amíg nincs meg,
+      a 2025/2026-os tabellában 4, a 2026/2027-esben 2 sor a nyers forrásnévvel látszik
 
 ---
 
@@ -210,6 +213,25 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-26 – Tabella: csapat feloldása `team_id` alapján (mobil olvasó)
+
+**Mit:** Az előző bejegyzés találatára a döntés: a tabellasort a webes import
+által beírt `team_id` köti csapathoz (D-120). A mobil csak olvas, az importot
+és a visszatöltést a webprojekt végzi. A `useStandings` `toTeams`-e most
+előbb a sor `team_id`-jét nézi. Ha van, azzal oldja fel a csapatot. Ha
+nincs, a korábbi normalizált névegyezés fut.
+**Fájlok:** `hooks/useStandings.ts`, `docs/feature-tasks.md`
+**Tesztelve:** `npx tsc --noEmit`, `npm run lint` hibátlan. A valódi
+`toTeams` kódját scratchpad-szkript futtatta négy esetre: régi név ID-vel
+(feloldódik, rövid név látszik), ID nélküli sor (névtartalék), nem létező
+csapatra mutató ID (nem oldódik fel), régi név ID nélkül (nem oldódik fel).
+Mind a várt eredményt adta. Éles adattal nem teszteltem: a `standings.data`
+sorokban még nincs `team_id`. Eszközön nem futtattam.
+**Nyitva maradt:** a webes oldal (import + visszatöltés). Amíg nincs meg, a
+Tabella a korábbi módon, név szerint működik. Ha megérkezik a webes jegyzet,
+ellenőrizni kell, hogy a mező neve valóban `team_id`.
+**Commit:** `fix: tabella csapat feloldása team_id alapján`
 
 ## 2026-09-26 – Három csapat átnevezése a 2026/2027-es nevekre (web → mobil szinkron)
 
@@ -4993,3 +5015,23 @@ párosítás tartalék nélkül – egy kézi JSON import ellenfél nélkül (`N
 kiesne, holott a régi szabály párosítaná.
 **Visszavonható?** Igen: `lib/teams.ts` és `lib/team-season-stats.ts`
 `pairGames`.
+
+## D-120 – A tabellasor csapatát a `standings.data` `team_id`-je köti, a webes import írja
+**Dátum:** 2026-09-26
+**Döntés:** A `standings.data` JSON tömb minden sora kap egy `team_id`
+(`teams.id`, szöveges uuid) mezőt. Ezt a **webprojekt** tabella-importja írja,
+és ugyanott töltődnek vissza a meglévő sorok. A mobil `useStandings` ID-s
+sornál csak az ID alapján old fel. Név szerint csak az ID nélküli sorokat
+oldja fel, ugyanúgy, mint a D-119 az ellenfélnél.
+**Miért:** A `standings.data` a scrapelt név pillanatképe. Klub-átnevezés
+után nem egyezik a `teams.name`-mel, és a forrás a 2026/2027-es szezonban is
+a régi szponzorneveket adja. A webprojekt a névváltozatokat már feloldja az
+importnál (`TEAM_NAME_ALIASES`), így ott egy helyen, egyszer dől el a
+csapat. A mobil nem importál és nem ír, csak olvas (D-004).
+**Alternatíva:** (b) a webes alias-tábla `@core` modulba emelése – minden
+átnevezéskor kézi bővítés, és a mobil minden olvasáskor újra feloldana; (c) a
+szezon `games.opponent` → `opponent_team_id` párjaiból épített térkép –
+meccs nélküli szezonban (2026/2027 eleje) nem működik; (d) marad a nyers
+forrásnév – a rövid név és a rövidítés elveszik az érintett soroknál.
+**Visszavonható?** Igen, a `hooks/useStandings.ts` `toTeams`-e. A mező a JSON-ban
+ártalmatlan, ha nem olvassa semmi.
