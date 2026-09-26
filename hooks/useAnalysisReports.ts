@@ -23,6 +23,7 @@ import { formatDate } from '@/lib/format';
 import { reportSummary } from '@/lib/report-format';
 import { createQueryCache, filterKey } from '@/lib/query-cache';
 import { supabase } from '@/lib/supabase';
+import { findOpponentTeam } from '@/lib/teams';
 import { useFilterStore } from '@/store/filterStore';
 import type { Team } from '@/types/filters';
 import type { AnalysisReport } from '@/types/analysis';
@@ -48,8 +49,8 @@ interface ReportContext {
   teamId: string;
   /** A saját csapat rövid neve a címekben. */
   ownName: string;
-  /** Teljes név → rövid név, az ellenfelek címéhez. */
-  shortNames: Map<string, string>;
+  /** A csapatlista – az ellenfelek rövid nevéhez a címekben. */
+  teams: Team[];
 }
 
 export function useAnalysisReports(): AnalysisReportsResult {
@@ -73,7 +74,7 @@ export function useAnalysisReports(): AnalysisReportsResult {
           seasonName: selectedSeason.name,
           teamId,
           ownName: selectedTeam.shortName,
-          shortNames: shortNames(teams),
+          teams,
         }
       : null;
 
@@ -99,17 +100,14 @@ export function useAnalysisReports(): AnalysisReportsResult {
   };
 }
 
-function shortNames(teams: Team[]): Map<string, string> {
-  return new Map(teams.map((team) => [team.name, team.shortName]));
-}
-
 async function fetchReports(context: ReportContext): Promise<ReportsPayload> {
   const [gameResult, teamResult, playerResult] = await Promise.all([
     supabase
       .from('game_text_reports')
       .select(
         'id, report_type, narrative, generated_at, ' +
-          'games!inner(date, opponent, our_score, opp_score, result, season_id, our_team_id)',
+          'games!inner(date, opponent, opponent_team_id, our_score, opp_score, result, season_id, ' +
+            'our_team_id)',
       )
       .eq('games.season_id', context.seasonId)
       .eq('games.our_team_id', context.teamId),
@@ -188,7 +186,9 @@ function toGameReports(rows: unknown, context: ReportContext): AnalysisReport[] 
     if (!base || !game) return [];
 
     const opponent = toText(game.opponent);
-    const short = context.shortNames.get(opponent) ?? opponent;
+    const opponentTeamId = typeof game.opponent_team_id === 'string' ? game.opponent_team_id : null;
+    const short =
+      findOpponentTeam(context.teams, opponentTeamId, opponent)?.shortName ?? opponent;
     const won = game.result === 'win';
 
     return [

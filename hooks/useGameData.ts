@@ -115,7 +115,8 @@ async function fetchGameData(
       supabase
         .from('games')
         .select(
-          'id, date, round, opponent, home_away, our_score, opp_score, result, kosarstat_game_id',
+          'id, date, round, opponent, opponent_team_id, home_away, our_score, opp_score, result, ' +
+            'kosarstat_game_id',
         )
         .eq('season_id', seasonId)
         .eq('our_team_id', teamId)
@@ -211,6 +212,7 @@ function toGames(rows: unknown[]): TeamGame[] {
         date,
         round: toRound(row.round),
         opponent: typeof opponent === 'string' ? opponent : 'Ismeretlen ellenfél',
+        opponentTeamId: typeof row.opponent_team_id === 'string' ? row.opponent_team_id : null,
         homeAway: home_away,
         ourScore: toNumber(row.our_score),
         oppScore: toNumber(row.opp_score),

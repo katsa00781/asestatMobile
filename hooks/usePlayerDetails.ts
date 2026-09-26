@@ -22,6 +22,7 @@ import { useFilterData } from '@/hooks/useFilterData';
 import { usePlayerData } from '@/hooks/usePlayerData';
 import { createQueryCache, filterKey } from '@/lib/query-cache';
 import { supabase } from '@/lib/supabase';
+import { findOpponentTeam } from '@/lib/teams';
 import { useFilterStore } from '@/store/filterStore';
 import type { Team } from '@/types/filters';
 import type { GameResult, HomeAway } from '@/types/games';
@@ -105,7 +106,7 @@ async function fetchDetails(
         'game_id, minutes, points, close_made, close_attempted, mid_made, mid_attempted, ' +
           'three_made, three_attempted, free_throw_made, free_throw_attempted, total_rebounds, ' +
           'assists, steals, blocks, turnovers, fouls_committed, valuation, ' +
-          'games!inner(date, opponent, home_away, result, season_id, our_team_id)',
+          'games!inner(date, opponent, opponent_team_id, home_away, result, season_id, our_team_id)',
       )
       .eq('player_id', playerId)
       .eq('games.season_id', seasonId)
@@ -125,14 +126,9 @@ async function fetchDetails(
   if (reportsResult.error) throw new Error(reportsResult.error.message);
 
   return {
-    games: toGameRows(statsResult.data, shortNames(teams)),
+    games: toGameRows(statsResult.data, teams),
     reports: toReports(reportsResult.data),
   };
-}
-
-/** Teljes csapatnév → rövid név, az ellenfél oszlop kiírásához. */
-function shortNames(teams: Team[]): Map<string, string> {
-  return new Map(teams.map((team) => [team.name, team.shortName]));
 }
 
 // --- Rendszerhatár: a Supabase válasza típusozatlan, itt validáljuk. ---
@@ -145,7 +141,7 @@ function toNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
-function toGameRows(rows: unknown, short: Map<string, string>): PlayerGameRow[] {
+function toGameRows(rows: unknown, teams: Team[]): PlayerGameRow[] {
   if (!Array.isArray(rows)) return [];
 
   return rows
@@ -164,7 +160,11 @@ function toGameRows(rows: unknown, short: Map<string, string>): PlayerGameRow[] 
         {
           gameId: row.game_id,
           date: game.date,
-          opponent: short.get(game.opponent) ?? game.opponent,
+          // Az ellenfél oszlopba a rövid név kerül; ha a csapat nem oldható
+          // fel, a meccs kori teljes név marad.
+          opponent:
+            findOpponentTeam(teams, game.opponentTeamId, game.opponent)?.shortName ??
+            game.opponent,
           homeAway: game.homeAway,
           result: game.result,
           minutes,
@@ -193,6 +193,7 @@ function toGameRows(rows: unknown, short: Map<string, string>): PlayerGameRow[] 
 interface GameMeta {
   date: string;
   opponent: string;
+  opponentTeamId: string | null;
   homeAway: HomeAway;
   result: GameResult;
 }
@@ -205,6 +206,7 @@ function toGameMeta(value: unknown): GameMeta | null {
   return {
     date: row.date,
     opponent: typeof row.opponent === 'string' ? row.opponent : '—',
+    opponentTeamId: typeof row.opponent_team_id === 'string' ? row.opponent_team_id : null,
     homeAway: row.home_away === 'home' ? 'home' : 'away',
     result: row.result === 'win' ? 'win' : 'loss',
   };

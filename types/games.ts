@@ -19,6 +19,11 @@ export interface TeamGame {
   round: number | null;
   /** Az ellenfél neve szövegesen, ahogy a `games` tábla tárolja. */
   opponent: string;
+  /**
+   * Az ellenfél csapat-azonosítója. Csapatot ezzel azonosítunk, nem a
+   * szöveges névvel – `null` csak kézi importnál fordulhat elő (D-119).
+   */
+  opponentTeamId: string | null;
   homeAway: HomeAway;
   ourScore: number;
   oppScore: number;

@@ -16,7 +16,7 @@
  * Három lekérdezés fut, mind a kapott szezonra:
  *
  * 1. `games` – csapatonként meccsszám, mérleg, szerzett és kapott pont, plusz
- *    a meccsek párosítása (lásd `pairGames`).
+ *    a meccsek párosítása az `opponent_team_id` alapján (lásd `pairGames`).
  * 2. A szezon `player_game_stats` táblája – **csapatösszegzéshez**. A
  *    szezonösszesítő view itt nem használható: abból hiányoznak a szezon
  *    közben távozott játékosok sorai (D-078).
@@ -100,7 +100,7 @@ export async function fetchTeamSeasonStats(
     fetchAllRows<unknown>((from, to) =>
       supabase
         .from('games')
-        .select('id, date, home_away, our_team_id, our_score, opp_score, result')
+        .select('id, date, home_away, our_team_id, opponent_team_id, our_score, opp_score, result')
         .eq('season_id', seasonId)
         .range(from, to),
     ),
@@ -147,6 +147,7 @@ interface GameRow {
   date: string;
   homeAway: string;
   teamId: string;
+  opponentTeamId: string | null;
   won: boolean;
   pointsFor: number;
   pointsAgainst: number;
@@ -164,6 +165,7 @@ function toGames(rows: unknown[]): GameRow[] {
         date,
         homeAway: typeof row.home_away === 'string' ? row.home_away : '',
         teamId,
+        opponentTeamId: typeof row.opponent_team_id === 'string' ? row.opponent_team_id : null,
         won: row.result === 'win',
         pointsFor: toNumber(row.our_score),
         pointsAgainst: toNumber(row.opp_score),
@@ -176,11 +178,56 @@ function toGames(rows: unknown[]): GameRow[] {
  * Meccs → az ellenfél ugyanarról a találkozóról felvett sora.
  *
  * Az adatbázis csapatperspektívánként tárol: egy találkozó két sorként él, és
- * nincs köztük kulcs. A párosítás dátum + a két eredmény halmaza alapján megy;
- * csak akkor fogadjuk el, ha a napon pontosan két ilyen sor van, más-más
- * csapaté, és a hazai/vendég oldal is tükrözi egymást (D-081).
+ * nincs köztük közvetlen kulcs. Elsődlegesen az `opponent_team_id` köti össze
+ * őket: ugyanazon a napon az A csapat sora a B ellen, és a B csapat sora az A
+ * ellen (D-119). Ami így nem párosul – ID nélküli sor –, arra a korábbi
+ * szabály a tartalék: dátum + a két eredmény halmaza (D-081).
  */
 function pairGames(games: GameRow[]): Map<string, string> {
+  const opponentOf = pairByTeamId(games);
+  const unpaired = games.filter((game) => !opponentOf.has(game.id));
+
+  for (const [gameId, partnerId] of pairByScore(unpaired)) {
+    opponentOf.set(gameId, partnerId);
+  }
+
+  return opponentOf;
+}
+
+/** Párosítás a két sor kölcsönös `opponent_team_id`-je alapján, napra pontosan. */
+function pairByTeamId(games: GameRow[]): Map<string, string> {
+  const byMatchup = new Map<string, GameRow[]>();
+
+  for (const game of games) {
+    if (!game.opponentTeamId) continue;
+    const key = `${game.date}|${game.teamId}|${game.opponentTeamId}`;
+    const group = byMatchup.get(key);
+    if (group) group.push(game);
+    else byMatchup.set(key, [game]);
+  }
+
+  const opponentOf = new Map<string, string>();
+
+  for (const game of games) {
+    if (!game.opponentTeamId) continue;
+    // Egy napon két csapat egyszer találkozik; ha mégis több sor jön, inkább
+    // kimarad, mint hogy rossz meccs statisztikája kerüljön az ellenfél-oldalra.
+    const own = byMatchup.get(`${game.date}|${game.teamId}|${game.opponentTeamId}`) ?? [];
+    const partners = byMatchup.get(`${game.date}|${game.opponentTeamId}|${game.teamId}`) ?? [];
+    if (own.length !== 1 || partners.length !== 1) continue;
+
+    opponentOf.set(game.id, partners[0].id);
+  }
+
+  return opponentOf;
+}
+
+/**
+ * Tartalék párosítás dátum + a két eredmény halmaza alapján: csak akkor
+ * fogadjuk el, ha a napon pontosan két ilyen sor van, más-más csapaté, és a
+ * hazai/vendég oldal is tükrözi egymást (D-081).
+ */
+function pairByScore(games: GameRow[]): Map<string, string> {
   const groups = new Map<string, GameRow[]>();
 
   for (const game of games) {

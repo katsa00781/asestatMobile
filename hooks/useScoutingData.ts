@@ -24,10 +24,9 @@ import { useFilterData } from '@/hooks/useFilterData';
 import { useGameData } from '@/hooks/useGameData';
 import { useTeamSeasonData } from '@/hooks/useTeamSeasonData';
 import { formatDate } from '@/lib/format';
-import { normalizeText } from '@/lib/search';
 import { buildScoutingView } from '@/lib/scouting-view';
 import { EMPTY_RECORD, type TeamSeasonPayload } from '@/lib/team-season-stats';
-import type { Team } from '@/types/filters';
+import { findOpponentTeam } from '@/lib/teams';
 import type { OpponentMeta, OpponentOption, ScoutingView } from '@/types/scouting';
 
 interface ScoutingResult {
@@ -72,7 +71,9 @@ export function useScoutingData(opponentId: string | null): ScoutingResult {
       };
     }
 
-    const lastId = lastGame ? findTeamId(lastGame.opponent, teams) : null;
+    const lastId = lastGame
+      ? (findOpponentTeam(teams, lastGame.opponentTeamId, lastGame.opponent)?.id ?? null)
+      : null;
     if (lastGame && lastId && known.has(lastId)) {
       return {
         id: lastId,
@@ -170,14 +171,4 @@ function buildView(
     payload.pairedGames.get(teamId) ?? 0,
     payload.pairedGames.get(opponentId) ?? 0,
   );
-}
-
-/** A `games.opponent` szöveges nevét kötjük csapat-azonosítóhoz. */
-function findTeamId(opponentName: string, teams: Team[]): string | null {
-  const needle = normalizeText(opponentName);
-  const match = teams.find(
-    (team) => normalizeText(team.name) === needle || normalizeText(team.shortName) === needle,
-  );
-
-  return match?.id ?? null;
 }

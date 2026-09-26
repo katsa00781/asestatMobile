@@ -155,6 +155,16 @@ előkészítve."), nem általános hálózati hibaként.
 
 ---
 
+## Web → mobil szinkron
+
+> Forrás: a webprojekt `mobile-sync/` jegyzetei. Átvezetés után a jegyzet
+> állapota `ÁTVEZETVE (dátum, mobil commit)` lesz.
+
+- [x] `games.opponent_team_id` (migráció + írók + olvasók, három jegyzet): az
+      ellenfél azonosítása ID alapján, név csak ID nélküli sorra (D-119)
+
+---
+
 ## Ship előtt
 
 > Az iOS build és a TestFlight feltöltés receptje: **`docs/ios-testflight.md`**
@@ -194,6 +204,42 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-26 – Ellenfél azonosítása `opponent_team_id` alapján (web → mobil szinkron)
+
+**Mit:** A webprojekt három `games-opponent-team-id` jegyzetét vezettem át
+(migráció, írók, olvasók). A mobilban nincs `opponentGameId` és nincs
+head-to-head nézet. Ahol ellenfelet azonosítottunk, most mindenhol az
+`opponent_team_id` az elsődleges, a név csak az ID nélküli sorra tartalék:
+(1) az Ellenfél scouting „legutóbbi ellenfél” alapértéke (eddig
+`findTeamId` névegyezéssel), (2) a játékos meccsbontásának és (3) az Elemzés
+hub meccsriport-címeinek rövid ellenfélneve (eddig `teams.name → short_name`
+térkép). Az utóbbi kettő a `teams-sponsor-rename` után a három átnevezett
+klub régi meccseinél a teljes régi nevet mutatta volna. (4) A ligamezőny
+meccspárosítása (`pairGames`, D-081) is átállt: elsődlegesen a kölcsönös
+`opponent_team_id` köt össze két sort, a dátum + eredmény szabály csak a
+maradékra fut. Közös helper: `lib/teams.ts` `findOpponentTeam`.
+**Fájlok:** `lib/teams.ts` (új), `lib/team-season-stats.ts`,
+`hooks/useGameData.ts`, `hooks/useScoutingData.ts`,
+`hooks/usePlayerDetails.ts`, `hooks/useAnalysisReports.ts`,
+`types/games.ts`, `docs/feature-tasks.md`
+**Tesztelve:** `npx tsc --noEmit`, `npm run lint` hibátlan. Éles adaton, SQL-lel
+mérve: 2024/2025-ben az ID-párosítás 366/366 sort köt össze (a régi szabály
+362-t), 2025/2026-ban 720/720-at (a régi 716-ot). A régi szabály minden párját
+az ID-s is megtalálja. `opponent_team_id` nélküli sor jelenleg nincs. A 4–4
+új pár két meccs 2024-10-26-án, azonos 96–87-es eredménnyel
+(Szolnok–Alba, Pécs–Körmend). Ezeket a dátum + eredmény szabály nem tudta
+szétválasztani, az ID-s párok tükrözött oldalúak. A valódi `pairGames` kódját
+scratchpad-szkript futtatta szintetikus eseteken: azonos napi kettős
+eredmény, ID nélküli tartalék, duplikált sor, hiányzó pár. Mind helyes.
+Eszközön (iOS/Android) nem futtattam.
+**Nyitva maradt:** A 2025/2026 szezonban is van két 2024-10-26-os dátumú
+meccssor (Pécs–Körmend, Szolnok–Alba), ugyanazzal az eredménnyel, mint a
+2024/2025-ös. Ez valószínűleg rossz szezonra vagy dátumra írt adat a
+webprojektben, a mobil kód nem érinti. A `teams-sponsor-rename` és a
+`szolnok-team-merge` jegyzet külön átvezetendő. Előbbi hardcode-olt régi
+névre vonatkozó pontja üres, a mobil kódban nincs ilyen név.
+**Commit:** `fix: ellenfél azonosítása opponent_team_id alapján`
 
 ## 2026-09-25 – Élő gyűjtő: IPv6 blokk megkerülése (webprojekt)
 
@@ -4167,6 +4213,8 @@ ellenfél-adat, és ha a `@core` hiányosnak látja, ezt is kimondja. A scouting
 képernyő egyelőre a D-079-es korláttal fut – ott a párosítás bevezetése külön
 feladat.
 **Visszavonható?** Igen, a `lib/team-season-stats` `pairGames` függvénye.
+**Részben felülírva:** D-119 – az elsődleges kulcs azóta az `opponent_team_id`,
+ez a szabály az ID nélküli sorok tartaléka.
 
 ## D-082 – A szerepkörök a statisztikából számolódnak, nem az adatbázisból
 **Dátum:** 2026-09-02
@@ -4872,3 +4920,24 @@ azzal hívna a job. Elvetve, mert a jogosultsági kép nem változna tőle. Ha
 valaha kell, a függvény elejére kerül egy explicit role-ellenőrzés.
 **Visszavonható?** Igen: `cron.unschedule('live-scan-every-minute')`, majd új
 job más tokennel.
+
+## D-119 – Az ellenfél csapatot az `opponent_team_id` azonosítja, a név csak tartalék
+**Dátum:** 2026-09-26
+**Döntés:** Ahol a mobil egy `games` sor ellenfelét csapathoz köti (scouting
+alapértéke, rövid ellenfélnév a listákban, ligamezőny meccspárosítása), ott a
+`games.opponent_team_id` az elsődleges kulcs. A `games.opponent` szöveg
+normalizált névegyezése csak az ID nélküli sorra fut (`lib/teams.ts`
+`findOpponentTeam`). A `pairGames` a kölcsönös ID-t (A sora B ellen + B sora
+A ellen, azonos napon, pontosan egy-egy sor) használja, a D-081 dátum +
+eredmény szabálya a maradékra marad.
+**Miért:** A webprojekt invariánsa (`context/architecture.md` 11. pont): a
+`games.opponent` a meccs kori nevet őrzi, klub-átnevezés után nem egyezik a
+`teams.name`-mel. A párosításnál a mérés is az ID mellett szól: 366/366 és
+720/720 sor, szemben a 362 és 716 sorral. Az azonos napon azonos eredménnyel
+végződő két meccset csak az ID tudja szétválasztani.
+**Alternatíva:** (a) csak a névalapú helyek átállítása, a `pairGames` marad –
+a két kettős-eredményes nap ellenfél-oldala kimaradna; (b) tisztán ID-s
+párosítás tartalék nélkül – egy kézi JSON import ellenfél nélkül (`NULL`)
+kiesne, holott a régi szabály párosítaná.
+**Visszavonható?** Igen: `lib/teams.ts` és `lib/team-season-stats.ts`
+`pairGames`.
