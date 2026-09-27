@@ -174,9 +174,10 @@ előkészítve."), nem általános hálózati hibaként.
       `games/[id]/postgame` alroute, a meccs részleteiről `NavRow` nyitja (D-122)
 - [x] Post-game: kis minta referencia (`report.baseline`) – „Liga” oszlop és
       „Kis minta” jelzés 3 szezonmeccs alatt, webes `8ccdf47` szinkron (D-123)
-- [ ] Post-game: az ellenfél box score névtartaléka (`findOpponentTeam`), mert a
-      2026/2027-es `games` sorokon nincs `opponent_team_id` – vagy a webes import
-      töltse ki (lásd a 2026-09-27-es munkanaplót)
+- [x] Post-game: hiányzó ellenfél box score a 2026/2027-es meccseken – a webes
+      import javítása pusholva, a 14 sor visszatöltve (web H11), mobil kód nem kellett
+- [ ] Post-game (döntés): a D-119 szerinti `findOpponentTeam` névtartalék a
+      `fetchOpponentLines`-ban is, védelemként a jövőbeli ID nélküli sorokra
 - [ ] Post-game, **webprojekt**: SELECT policy a `player_game_text_reports`-ra az
       `authenticated` szerepkörnek – RLS be van kapcsolva, policy nincs, így a
       mentett játékos-szöveg sem a weben, sem a mobilon nem olvasható
@@ -227,6 +228,39 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-27 – Post-game: ellenfél box score és dobástérkép a 2026/2027-es meccseken (web H11)
+
+**Mit:** Az előző bejegyzés hibáját a webprojektben javítottuk, mobil kód nem
+változott.
+- **Ok:** a webes C/2-es importkód (`fa0a719`, az importok írják az
+  `opponent_team_id`-t) nem volt pusholva. A GitHub Actions scrape a régi
+  kóddal írta a 2026/27-es 14 `games` sort `NULL` ID-val.
+- **Mellékkár:** ugyanez a futás a H9 előtti kóddal dolgozta fel újra a
+  dobástérképet, és az ASE–Pécs meccs 125 dobáseseménye elveszett.
+- **Javítás:**
+  - push (`03e7ddd..64c732d`);
+  - a felhasználó az SQL Editorban újrafuttatta a
+    `migrations/add-games-opponent-team-id.sql`-t;
+  - `HUNBASKET_SEASON_NAME=2026/2027 npm run hunbasket:shotchart:assign`
+    (7 meccs, 902 esemény, 0 hiba).
+**Fájlok:** `docs/feature-tasks.md`
+**Tesztelve:**
+- DB: `games` 1100 sor, 0 `NULL` `opponent_team_id`; a 26/27-es 14 sor ID-je
+  a névvel egyezik, önmagára mutató nincs.
+- Mobil post-game harness a Pécs–ASE meccsen, élő adaton:
+  - ellenfél box score 11 sor, az összegzésben „NKA Universitas Pécs” áll;
+  - OREB% 100,0 helyett 40,6;
+  - dobástérkép 73 dobás;
+  - a kis minta referencia változatlanul helyes.
+- Megfigyelés, nem hiba: „védekezésben romlott a hatékonyság” a 98,8-as DRtg
+  mellett. A `@core` a védekezést az ellenfél eFG-je (56,7%) és a
+  ligamedián (53,0%) különbségéből minősíti, a jó DRtg a Pécs 22,5%-os TO
+  arányából jön.
+**Nyitva maradt:**
+- Döntés: kapjon-e a post-game `findOpponentTeam` névtartalékot (D-119).
+- A webes összevetés (spec 6. pont) most már elvégezhető.
+**Commit:** `docs: post-game ellenfél-adat a 2026/27-es szezonban – web H11 átvezetve`
 
 ## 2026-09-27 – Post-game: kis minta referencia (web `8ccdf47` → mobil)
 
