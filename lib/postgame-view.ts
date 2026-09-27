@@ -19,6 +19,7 @@ import { formatDecimal, formatSigned } from '@/lib/format';
 import { plainText } from '@/lib/report-format';
 import type { GameReport } from '@/types/games';
 import type {
+  BaselineView,
   DecisiveGroup,
   HighlightView,
   KeyStatRow,
@@ -62,15 +63,20 @@ export function buildPostgameView(
   report: PostGameReport,
   playerReports: Map<string, GameReport>,
 ): PostgameView {
+  // Kis szezonmintánál a `@core` a liga mediánt adja a `season` mezőkben (web 8ccdf47).
+  const leagueBaseline = report.baseline?.kind === 'league';
+
   return {
     summary: plainText(report.summary),
     notes: report.dataNotes.length > 0 ? report.dataNotes.map(plainText).join(' ') : null,
     kpis: buildKpis(report),
+    baseline: buildBaseline(report),
     keyStats: report.metrics.keyStats.map((metric) => ({
       key: metric.key,
       label: KEY_STAT_LABELS[metric.key] ?? plainText(metric.label),
+      // Liga-referenciánál a középső oszlop maga a medián – nem ismételjük.
       subtitle:
-        metric.leagueMedian !== undefined
+        metric.leagueMedian !== undefined && !leagueBaseline
           ? `Ligamedián: ${formatDecimal(metric.leagueMedian, 1)}`
           : undefined,
       metrics: [
@@ -81,7 +87,7 @@ export function buildPostgameView(
     })),
     shotProfile: report.charts.shotProfile.map((datum) => ({
       label: SHOT_PROFILE_LABELS[datum.label] ?? plainText(datum.label),
-      note: `Szezon: ${formatDecimal(datum.season, 1)}%`,
+      note: `${leagueBaseline ? 'Ligamedián' : 'Szezon'}: ${formatDecimal(datum.season, 1)}%`,
       valueText: `${formatDecimal(datum.game, 1)}%`,
       percent: datum.game,
       // Megoszlás, nem hatékonyság: semleges cián sáv, mint a leíró metrikáknál (D-085).
@@ -98,6 +104,19 @@ export function buildPostgameView(
     strengths: toEntries(report.strengths),
     problems: toEntries(report.problems),
     nextFocus: toEntries(report.nextFocus),
+  };
+}
+
+function buildBaseline(report: PostGameReport): BaselineView {
+  const baseline = report.baseline;
+  const league = baseline?.kind === 'league';
+
+  return {
+    sectionLabel: `Kulcsmutatók – meccs vs. ${league ? 'ligamedián' : 'szezon'}`,
+    columnLabel: league ? 'Liga' : 'Szezon',
+    smallSampleNote: baseline?.smallSample
+      ? `${baseline.seasonGames} szezonmeccs – a referencia: ${baseline.noun}.`
+      : null,
   };
 }
 

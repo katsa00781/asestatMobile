@@ -51,11 +51,19 @@ export function PostgamePanel({ view }: { view: PostgameView }) {
         <StatTile label="eFG%" value={view.kpis.efgText} style={styles.tile} />
       </View>
 
-      <SectionLabel label="Kulcsmutatók – meccs vs. szezon" style={styles.section} />
+      <SectionLabel label={view.baseline.sectionLabel} style={styles.section} />
+      {view.baseline.smallSampleNote ? (
+        <View style={styles.sampleRow}>
+          <Badge label="Kis minta" variant="warning" />
+          <Text className="font-body text-sm text-secondary" style={styles.sampleText}>
+            {view.baseline.smallSampleNote}
+          </Text>
+        </View>
+      ) : null}
       <View style={styles.list}>
         <StackedRowHeader
           // A „Δ” (U+0394) nincs a Barlow Condensedben – ezért „Elt.”.
-          labels={['Meccs', 'Szezon', 'Elt. pp']}
+          labels={['Meccs', view.baseline.columnLabel, 'Elt. pp']}
           metricWidth={KEY_STAT_WIDTH}
           hasLeading={false}
         />
@@ -224,6 +232,17 @@ const styles = StyleSheet.create({
   },
   list: {
     marginHorizontal: spacing[4],
+  },
+  sampleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginHorizontal: spacing[4],
+    marginBottom: spacing[2],
+  },
+  sampleText: {
+    flex: 1,
+    lineHeight: 19,
   },
   players: {
     marginTop: spacing[2],

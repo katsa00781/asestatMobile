@@ -79,11 +79,20 @@ export interface PostgamePlayerView {
   report: GameReport | null;
 }
 
+/** A kulcsmutatók viszonyítási alapja: szezonátlag, vagy kis mintánál liga medián. */
+export interface BaselineView {
+  sectionLabel: string;
+  columnLabel: string;
+  /** Kis szezonmintánál a „Kis minta” jelzés szövege, egyébként `null`. */
+  smallSampleNote: string | null;
+}
+
 export interface PostgameView {
   summary: string;
   /** A `dataNotes` egy bekezdésben, vagy `null`. */
   notes: string | null;
   kpis: PostgameKpis;
+  baseline: BaselineView;
   keyStats: KeyStatRow[];
   shotProfile: MeterEntry[];
   shotMap: ShotMapView | null;

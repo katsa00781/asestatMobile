@@ -172,6 +172,11 @@ előkészítve."), nem általános hálózati hibaként.
       az ID nélküli sorra tartalék – mobil olvasó kész (D-120)
 - [x] Post-game elemzés (`@core/postgame-report` + kosarstat-kiegészítés):
       `games/[id]/postgame` alroute, a meccs részleteiről `NavRow` nyitja (D-122)
+- [x] Post-game: kis minta referencia (`report.baseline`) – „Liga” oszlop és
+      „Kis minta” jelzés 3 szezonmeccs alatt, webes `8ccdf47` szinkron (D-123)
+- [ ] Post-game: az ellenfél box score névtartaléka (`findOpponentTeam`), mert a
+      2026/2027-es `games` sorokon nincs `opponent_team_id` – vagy a webes import
+      töltse ki (lásd a 2026-09-27-es munkanaplót)
 - [ ] Post-game, **webprojekt**: SELECT policy a `player_game_text_reports`-ra az
       `authenticated` szerepkörnek – RLS be van kapcsolva, policy nincs, így a
       mentett játékos-szöveg sem a weben, sem a mobilon nem olvasható
@@ -222,6 +227,57 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-27 – Post-game: kis minta referencia (web `8ccdf47` → mobil)
+
+**Mit:** A webprojekt `2026-09-27-postgame-baseline-ratings` jegyzete alapján
+lefutott az `@core` szinkron (`postgame-report`, `player-postgame`) külön
+commitban (`86bc942`). A `@core` 3 szezonmeccs alatt a liga mediánt teszi a
+`keyStats[].season` és a dobásprofil `season` mezőjébe. Emiatt a post-game
+nézet a `report.baseline` alapján ír feliratot (D-123):
+- a szekciócím „Kulcsmutatók – meccs vs. ligamedián”;
+- az oszlopfejléc „Liga”;
+- a dobásprofil megjegyzése „Ligamedián: …”;
+- a szekciócím alatt `warning` `Badge` „Kis minta” és „N szezonmeccs – a
+  referencia: …” sor.
+
+Normál mintánál a nézet nem változott. A „Visszaesés” → „Gyenge meccs”, a
+védekezési tényezők számai, a `Ratingek` / `Fő ok` / `Minta` összegzés-sorok
+és a több fókuszsor a `@core` szövegeiből jönnek, mobil kód nem kellett
+hozzájuk. A mobil sehol nem szűr pontos szövegegyezéssel.
+**Fájlok:** `types/postgame.ts` (`BaselineView`), `lib/postgame-view.ts`
+(`buildBaseline`, feltételes ligamedián-felirat), `components/PostgamePanel.tsx`
+(dinamikus cím és fejléc, kis minta sor), `docs/feature-tasks.md`
+**Tesztelve:**
+- `npx tsc --noEmit`, `npm run lint` hibátlan.
+- A valódi `lib/postgame-data` + `lib/postgame-view` láncot scratchpad-harness
+  futtatta élő adaton, anon klienssel, két meccsen:
+  - Pécs–ASE 77:102 (2026-09-26, 2026/2027, 1 szezonmeccs): `baseline.kind =
+    'league'`, „Liga” oszlop, „Kis minta” sor, az eltérések nem nullák (a web
+    hibalistájának fő pontja);
+  - Kaposvár 83:85 (2026-05-20, 2025/2026, 58 meccs): `kind = 'season'`,
+    feliratok változatlanok, a javított fókusz-szabályok miatt most négy
+    fókuszsor van.
+- Eszközön és szimulátoron nem néztem meg.
+
+**Nyitva maradt:**
+- **Új hiba, nem ennek a feladatnak a része:** a 2026/2027-es szezon mind a 14
+  `games` során `NULL` az `opponent_team_id` (2025/2026: 0/720). A post-game
+  `fetchOpponentLines` csak ID alapján keres, névtartaléka nincs. Az új
+  szezonban így az ellenfél box score mindig hiányzik:
+  - „Ellenfél” szerepel a névben;
+  - az OREB% 100% (nincs ellenfél-DREB);
+  - a védekezési értékelés korlátozott.
+
+  Két javítási út van: (a) a webes import töltse ki az ID-t, a D-119
+  invariánsa szerint; (b) a mobil post-game kapjon `findOpponentTeam`
+  névtartalékot, ahogy a D-119 az ID nélküli sorokra előírja.
+- Opcionális, a jegyzet szerint: ORtg / DRtg / Net sor (`metrics.ratings`) és
+  ellenfél-dobás blokk (`metrics.opponent`). Most nem készült el, a ratingek
+  az összegzés szövegében megjelennek.
+- A webes összevetés (spec 6. pont) továbbra is nyitott.
+
+**Commit:** `feat: post-game kis minta referencia`
 
 ## 2026-09-26 – Post-game elemzés (web → mobil szinkron)
 
@@ -5192,3 +5248,20 @@ adatmodul miatt a lánc élő adaton, a képernyő nélkül is ellenőrizhető v
 
 **Visszavonható?** Igen: a `postgame.tsx` és a `NavRow` eltávolításával. Az
 `[id]/index.tsx` áthelyezés URL-t nem változtatott.
+
+## D-123 – Post-game kis minta: „Liga” oszlop, a ligamedián alcím elmarad
+**Dátum:** 2026-09-27
+**Döntés:** Ha a `report.baseline.kind === 'league'`, a kulcsmutatók középső
+oszlopának fejléce „Liga”, a szekciócím „meccs vs. ligamedián”, a
+soronkénti „Ligamedián: …” alcím pedig elmarad. `baseline.smallSample`
+esetén a cím alatt meglévő `warning` `Badge` („Kis minta”) és egy
+magyarázó sor jelenik meg. Szezon-referenciánál minden a régi marad.
+**Miért:** Kis mintánál a középső oszlop maga a liga medián, az alcím
+ugyanazt a számot ismételné. A web „Referencia” szava és a `baseline.label`
+(„Liga medián (kis minta)”) nem fér el az 52 pt-os oszlopfejlécben, és a
+kis minta tényét a jelvény úgyis mutatja. Új design token és új komponens
+nincs.
+**Alternatíva:** (a) a `baseline.label` szó szerint a fejlécben: levágódna;
+(b) „Ref.” fejléc: kevésbé érthető; (c) az alcím megtartása, ahogy a weben:
+duplikált szám.
+**Visszavonható?** Igen: `lib/postgame-view.ts` `buildBaseline`.
