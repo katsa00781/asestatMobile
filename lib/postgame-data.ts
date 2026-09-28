@@ -27,6 +27,7 @@ import {
   type PostGameShotMapContext,
   type ShotMapEventInput,
   type TeamGameStat,
+  type TeamSeasonStat as PostgameTeamSeasonStat,
 } from '@core/postgame-report';
 import type { PlayerSeasonStat } from '@core/pregame-scouting';
 import { getSeasonStatsTable } from '@core/season-tables';
@@ -99,7 +100,8 @@ export interface ReportInput {
 }
 
 export function buildPostgameReport(input: ReportInput): PostGameReport | null {
-  const { game, seasonName, teamId, teamName, payload, leagueTeams } = input;
+  const { game, seasonName, teamId, teamName, payload } = input;
+  const leagueTeams = input.leagueTeams.map(withOpponentTotals);
 
   // A `teamSeason` ugyanabból a tömbből jön, amiből a benchmark épül – így a
   // liga + szezon kulcs biztosan egyezik (a spec 2.1 invariánsa).
@@ -162,6 +164,25 @@ export function buildPostgameReport(input: ReportInput): PostGameReport | null {
     : buildKosarstatPostgameContext(null);
 
   return mergeKosarstatPostgameContext(baseReport, kosarstat);
+}
+
+/**
+ * Az ellenfelek szezonos V-lepje és birtoklásbecslése a `@core` bemenetében
+ * (web H12, `SeasonComparison` `postgameOpponentTotalsByTeam`). Ezekkel a
+ * referencia OREB%-a és a közös birtoklásszám ugyanazzal a definícióval
+ * számol, mint a meccsérték. A mezőny **minden** csapata megkapja, különben a
+ * liga medián vegyes definícióból állna össze. Az `opponent` blokk csak a
+ * párosított meccsekből összegez (`lib/team-season-stats`), ahogy a web is
+ * csak a kétcsapatos meccseket veszi.
+ */
+function withOpponentTotals(team: TeamSeasonStat): PostgameTeamSeasonStat {
+  const o = team.opponent;
+  const oppPossessions = o.fga2 + o.fga3 + 0.44 * o.fta + o.tov - o.oreb;
+  return {
+    ...team,
+    oppDreb: o.dreb > 0 ? o.dreb : undefined,
+    oppPossessions: oppPossessions > 0 ? oppPossessions : undefined,
+  };
 }
 
 /** A box score sorainak összege a `TeamGameStat` alakjában (webes `buildTeamGame`). */

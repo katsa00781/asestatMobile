@@ -34,9 +34,11 @@ const KEY_STAT_LABELS: Record<string, string> = {
   efg: 'Effektív mezőny %',
   three_pct: 'Hármas %',
   assist_rate: 'Assziszt arány',
+  // Oliver-féle TO rate: LV / (FGA + 0.44·FTA + LV) – web H12.
   turnover_rate: 'Eladott labda %',
   oreb_rate: 'Támadó lepattanó %',
-  ft_rate: 'Büntetőráta',
+  // FTM / FGA, nem FTA / FGA (web H12). A képlet nem fér ki a sorban (D-124).
+  ft_rate: 'Büntetőpont-ráta',
 };
 
 /** Ezeknél a kisebb érték a jobb – a különbség színe megfordul. */
@@ -45,7 +47,7 @@ const LOWER_IS_BETTER = new Set(['turnover_rate']);
 const SHOT_PROFILE_LABELS: Record<string, string> = {
   '2P arány': 'Kettes arány',
   '3P arány': 'Hármas arány',
-  'FT arány': 'Büntető arány',
+  'FTM arány': 'Büntetőpont-arány',
 };
 
 const ZONES = [
@@ -65,6 +67,8 @@ export function buildPostgameView(
 ): PostgameView {
   // Kis szezonmintánál a `@core` a liga mediánt adja a `season` mezőkben (web 8ccdf47).
   const leagueBaseline = report.baseline?.kind === 'league';
+  // Kis minta liga benchmark nélkül: a `season` maga a meccs, a delta 0 – nem írjuk ki (web H12).
+  const comparable = report.baseline?.comparable ?? true;
 
   return {
     summary: plainText(report.summary),
@@ -79,15 +83,19 @@ export function buildPostgameView(
         metric.leagueMedian !== undefined && !leagueBaseline
           ? `Ligamedián: ${formatDecimal(metric.leagueMedian, 1)}`
           : undefined,
-      metrics: [
-        { value: formatDecimal(metric.game, 1) },
-        { value: formatDecimal(metric.season, 1) },
-        { value: formatSigned(metric.delta, 1), tone: deltaTone(metric.key, metric.delta) },
-      ],
+      metrics: comparable
+        ? [
+            { value: formatDecimal(metric.game, 1) },
+            { value: formatDecimal(metric.season, 1) },
+            { value: formatSigned(metric.delta, 1), tone: deltaTone(metric.key, metric.delta) },
+          ]
+        : [{ value: formatDecimal(metric.game, 1) }, { value: '–' }, { value: '–' }],
     })),
     shotProfile: report.charts.shotProfile.map((datum) => ({
       label: SHOT_PROFILE_LABELS[datum.label] ?? plainText(datum.label),
-      note: `${leagueBaseline ? 'Ligamedián' : 'Szezon'}: ${formatDecimal(datum.season, 1)}%`,
+      note: comparable
+        ? `${leagueBaseline ? 'Ligamedián' : 'Szezon'}: ${formatDecimal(datum.season, 1)}%`
+        : null,
       valueText: `${formatDecimal(datum.game, 1)}%`,
       percent: datum.game,
       // Megoszlás, nem hatékonyság: semleges cián sáv, mint a leíró metrikáknál (D-085).
@@ -112,11 +120,16 @@ function buildBaseline(report: PostGameReport): BaselineView {
   const league = baseline?.kind === 'league';
 
   return {
-    sectionLabel: `Kulcsmutatók – meccs vs. ${league ? 'ligamedián' : 'szezon'}`,
+    sectionLabel:
+      baseline?.comparable === false
+        ? 'Kulcsmutatók – meccs'
+        : `Kulcsmutatók – meccs vs. ${league ? 'ligamedián' : 'szezon'}`,
     columnLabel: league ? 'Liga' : 'Szezon',
-    smallSampleNote: baseline?.smallSample
-      ? `${baseline.seasonGames} szezonmeccs – a referencia: ${baseline.noun}.`
-      : null,
+    smallSampleNote: !baseline?.smallSample
+      ? null
+      : baseline.comparable
+        ? `${baseline.seasonGames} szezonmeccs – a referencia: ${baseline.noun}.`
+        : `${baseline.seasonGames} szezonmeccs, ligamedián nélkül – nincs referencia.`,
   };
 }
 
@@ -221,7 +234,11 @@ function buildDecisiveGroups(report: PostGameReport): DecisiveGroup[] {
     };
     group.items.push({
       text: plainText(factor.label),
-      negative: isNegativeDecisiveLabel(factor.label, factor.axis),
+      // Az explicit előjel a mérvadó (web H12); a szövegből becslés csak a
+      // `tone` nélküli, régi riportokra marad.
+      negative: factor.tone
+        ? factor.tone === 'negative'
+        : isNegativeDecisiveLabel(factor.label, factor.axis),
     });
     groups.set(key, group);
   }
@@ -232,6 +249,7 @@ function buildDecisiveGroups(report: PostGameReport): DecisiveGroup[] {
 /**
  * A webes `isNegativeDecisiveLabel` (`SeasonComparison.tsx`) 1:1-es másolata.
  * Nem `@core`, ezért itt él: a tényező hangnemét a szövegből következteti ki.
+ * Csak tartalék a `tone` nélküli tényezőkre – az új címkéknél téved.
  */
 export function isNegativeDecisiveLabel(label: string, axis: 'offense' | 'defense'): boolean {
   const lower = label.toLowerCase();

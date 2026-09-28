@@ -176,6 +176,11 @@ előkészítve."), nem általános hálózati hibaként.
       „Kis minta” jelzés 3 szezonmeccs alatt, webes `8ccdf47` szinkron (D-123)
 - [x] Post-game: hiányzó ellenfél box score a 2026/2027-es meccseken – a webes
       import javítása pusholva, a 14 sor visszatöltve (web H11), mobil kód nem kellett
+- [x] Post-game H12 (web `157b2b1` … `6cc80b2`, 8 jegyzet): `@core` szinkron,
+      `oppDreb` / `oppPossessions` bemenet, döntő tényezők `tone`-ja, FTM-címkék,
+      referencia nélküli kis minta (D-124, D-125); Kosarstat-adat ellenőrizve
+- [ ] Post-game H12: eszközös próba (iOS + Android) az ASE–Pécs és a
+      Szolnok–OSE meccsen – a harness élő adaton lefutott, eszközön még nem
 - [ ] Post-game (döntés): a D-119 szerinti `findOpponentTeam` névtartalék a
       `fetchOpponentLines`-ban is, védelemként a jövőbeli ID nélküli sorokra
 - [ ] Post-game, **webprojekt**: SELECT policy a `player_game_text_reports`-ra az
@@ -228,6 +233,71 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-09-28 – Post-game H12: referencialogika, metrika-definíciók, előjel (web → mobil)
+
+**Mit:** A webes H12 hibalista 8 `mobile-sync` jegyzetét vezettem át
+(összesítő: `2026-09-28-mobil-teendok-osszesito.md`).
+- **`@core` szinkron** külön commitban (`fa4ef72`): `postgame-report`,
+  `player-postgame`. A `tsc` elsőre is hibátlan volt, mert a mobil a
+  `PostgameBaseline`-t csak olvassa, nem építi.
+- **Bemenet** (`lib/postgame-data.ts`, `withOpponentTotals`): a mezőny minden
+  csapata megkapja az `oppDreb`-et és az `oppPossessions`-t, még a
+  `buildTeamBenchmarks` és a `teamSeason` kiválasztása előtt. Mindkettő a
+  `team-season-stats` `opponent` blokkjából jön. Ez csak a párosított
+  meccseket összegzi, ahogy a web is csak a kétcsapatos meccseket veszi. A
+  birtoklást a web meccsenként 0-ra vágja, mi az összegből számolunk; ez csak
+  negatív meccsbecslésnél térne el, ilyen nincs.
+- **Nézet** (`lib/postgame-view.ts`):
+  - döntő tényezők: a `factor.tone` a mérvadó, a regex csak tartalék a
+    `tone` nélküli riportokra;
+  - `SHOT_PROFILE_LABELS` kulcsa `'FTM arány'`, felirata „Büntetőpont-arány”;
+  - a `ft_rate` felirata „Büntetőpont-ráta” (D-124);
+  - `baseline.comparable === false` esetén a referencia- és az
+    eltérésoszlopban „–” áll, a dobásprofilnál nincs megjegyzés, a szekciócím
+    „Kulcsmutatók – meccs” (D-125).
+- **Kódváltozás nélkül:**
+  - USG% (jegyzet 4): a mobil csak a `@core` `usageLabel`-jét mutatja, számot,
+    saját küszöböt és saját usage-trendet nem. A `clutch-view` nem érintett.
+  - Védekezés (jegyzet 6): a mobil nem ír saját mondatot a
+    `defenseEfficiencyDelta`-ból. A `@core` összegzése már a számokat írja
+    („ellenfél eFG 56.7% vs liga medián 53.0%, +3.7 pp”).
+  - Névillesztés és lineup (jegyzet 5): a mobil nem használ lineup-adatot.
+  - A `dataNotes` eddig is megjelent (`notes`), az új dobástérkép-megjegyzés
+    tördelve olvasható.
+
+**Fájlok:** `core/postgame-report.ts`, `core/player-postgame.ts` (szinkron),
+`lib/postgame-data.ts`, `lib/postgame-view.ts`, `types/postgame.ts`,
+`docs/feature-tasks.md`
+**Tesztelve:**
+- `npx tsc --noEmit`, `npm run lint` hibátlan.
+- Scratchpad-harness (jiti + aliasok, anon kliens) a valódi
+  `lib/team-season-stats` → `lib/postgame-data` → `lib/postgame-view` láncon,
+  élő adaton:
+  - **ASE–Pécs** (2026-09-26): liga OREB medián **26,3%**, birtoklás
+    **75,5**, DRtg **102,0**, mind a jegyzet szerinti érték. A döntő
+    tényezők előjele helyes: az „Ellenfél hatékonyan dobott (…)” ▼ lett, a régi
+    regex pozitívnak látta volna. A `dataNotes`-ban megjelenik a „73 dobás a
+    box score 76 mezőnykísérletével szemben” megjegyzés. A clutch betölt, a
+    nyers metaadat helyes: „Atomerőmű SE / NKA Universitas Pécs”.
+  - **Szolnok–OSE** (2026-09-25), mindkét oldalról: a közös birtoklás 87,0
+    mindkét nézőpontból, az ORtg és a DRtg tükörképek (119,6 / 106,9). A
+    „Periméter-kockázat (ellenfél 3P 9/24 …)” ▼.
+  - A **Honvéd–Kecskemét**, a **Szombathely–Fót** és a **Kaposvár–Szeged**
+    meccs mind a 6 nézőpontból betölti a Kosarstat blokkot (8 negyedsor, 2
+    metrikasor), és a clutch is feldolgozható. A 2026/27-es `games` sorok
+    közül 14/14 Kosarstat-linkelt.
+  - A `comparable === false` ágat az élő adat nem adja ki. Ezt módosított
+    baseline-nal néztem meg: „–” / „–” oszlopok, dobásprofil-megjegyzés
+    nélkül.
+- Eszközön és szimulátoron nem néztem meg.
+
+**Nyitva maradt:**
+- Eszközös próba (iOS + Android) az ASE–Pécs és a Szolnok–OSE meccsen.
+- Továbbra is nyitott: `findOpponentTeam` névtartalék (D-119), webes
+  összevetés (spec 6. pont).
+
+**Commit:** `feat: post-game H12 átvezetése – ellenfél-összegek, előjel, FTM-címkék`
 
 ## 2026-09-27 – Post-game: ellenfél box score és dobástérkép a 2026/2027-es meccseken (web H11)
 
@@ -5299,3 +5369,35 @@ nincs.
 (b) „Ref.” fejléc: kevésbé érthető; (c) az alcím megtartása, ahogy a weben:
 duplikált szám.
 **Visszavonható?** Igen: `lib/postgame-view.ts` `buildBaseline`.
+
+## D-124 – A büntetőmutató felirata „Büntetőpont-ráta”, képlet nélkül
+**Dátum:** 2026-09-28
+**Döntés:** A `ft_rate` kulcsmutató felirata „Büntetőpont-ráta”, a
+dobásprofilé „Büntetőpont-arány”. A web H12 óta a mutató FTM / FGA, nem
+FTA / FGA, és a „pont” szó ezt jelzi. A jegyzet példája, a „Büntetőpont-ráta
+(FTM/FGA)”, nem került be.
+**Miért:** A kulcsmutató-sorban három 52 pt-os számoszlop mellett a cím
+~130 pt-ot kap, és egysoros. A „(FTM/FGA)” toldat levágódna, és a már most
+leghosszabb „Támadó lepattanó %” is a határon van. Új komponens vagy
+kétsoros cím a többi sorral való igazítást bontaná meg.
+**Alternatíva:** (a) a teljes „Büntetőpont-ráta (FTM/FGA)”: levágódna;
+(b) a képlet az alcímben: ott a ligamedián áll, együtt ez is levágódna;
+(c) a régi „Büntetőráta”: félrevezető, mert FTA-t sugall.
+**Visszavonható?** Igen: `lib/postgame-view.ts` `KEY_STAT_LABELS`.
+
+## D-125 – Referencia nélküli kis minta: „–” oszlopok, a szerkezet marad
+**Dátum:** 2026-09-28
+**Döntés:** Ha a `report.baseline.comparable === false` (kis minta, liga
+benchmark nélkül), a kulcsmutatók referencia- és eltérésoszlopában „–” áll,
+színezés nélkül. A dobásprofil sorai nem kapnak megjegyzést, a szekciócím
+„Kulcsmutatók – meccs”. A „Kis minta” jelvény sora ezt írja: „N szezonmeccs,
+ligamedián nélkül – nincs referencia.”
+**Miért:** A `season` mező ilyenkor maga a meccsérték, így 0-s delta jelenne
+meg (web H12, jegyzet 1). A „–” a webes MD-export megoldása. Az oszlopok
+megtartásával a sorok magassága és igazítása nem változik, a hiányt pedig
+kimondja a nézet.
+**Alternatíva:** (a) a két oszlop elrejtése: a fejléc és a sorok
+szélessége szezonfüggővé válna; (b) a meccsérték önmagában, a szekció
+nélkül: elveszne a meccs kulcsmutató-képe.
+**Visszavonható?** Igen: `lib/postgame-view.ts` `buildPostgameView` /
+`buildBaseline`.

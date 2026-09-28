@@ -25,7 +25,7 @@ export interface PostgameKpis {
   efgText: string;
 }
 
-/** Egy kulcsmutató sora: meccs / szezon / különbség, alcímben a ligamedián. */
+/** Egy kulcsmutató sora: meccs / referencia / különbség (referencia nélkül „–”), alcímben a ligamedián. */
 export interface KeyStatRow {
   key: string;
   label: string;
@@ -45,7 +45,7 @@ export interface ShotMapView {
 
 export interface DecisiveItem {
   text: string;
-  /** A tényező a csapat kárára szólt-e (▼) – a web szövegből következteti ki. */
+  /** A tényező a csapat kárára szólt-e (▼) – a `@core` `tone`-ja, régi riportnál szövegből becsülve. */
   negative: boolean;
 }
 
