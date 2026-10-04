@@ -4,8 +4,8 @@
  *
  * Makett nincs hozzá: a jegyzet a specifikáció, és minden szekció meglévő,
  * jóváhagyott komponensből épül – `InsightCard`, `StatTile`, `StackedRow`,
- * `MeterList`, `StatList`, `StatMatrix`, `PointList`, `GlowCard` (D-122).
- * Új design token nincs.
+ * `MeterList`, `StatList`, `StatMatrix`, `PointList`, `GlowCard` (D-122),
+ * a saját – ellenfél blokkoknál `TeamSplitList` (D-126). Új design token nincs.
  */
 import { StyleSheet, Text, View } from 'react-native';
 import { Crosshair, Target, ThumbsDown, ThumbsUp, TriangleAlert } from 'lucide-react-native';
@@ -22,6 +22,7 @@ import { StackedRow, StackedRowHeader } from '@/components/StackedRow';
 import { StatList } from '@/components/StatList';
 import { StatMatrix } from '@/components/StatMatrix';
 import { StatTile } from '@/components/StatTile';
+import { TeamSplitList } from '@/components/TeamSplitList';
 import { accentColor, fontSize, letterSpacing, spacing, tracking } from '@/constants/theme';
 import type { HighlightView, PostgameView, ShotMapView } from '@/types/postgame';
 import type { PointEntry } from '@/types/scouting';
@@ -78,9 +79,39 @@ export function PostgamePanel({ view }: { view: PostgameView }) {
         ))}
       </View>
 
+      {view.boxScore ? (
+        <>
+          <SectionLabel label="Box score alapmutatók" style={styles.section} />
+          <TeamSplitList
+            ownName={view.ownName}
+            opponentName={view.opponentName}
+            metrics={view.boxScore}
+            style={styles.list}
+          />
+        </>
+      ) : null}
+
       <MeterList entries={view.shotProfile} label="Dobásprofil" style={styles.sectionBlock} />
 
       {view.shotMap ? <ShotMapSection shotMap={view.shotMap} /> : null}
+
+      {view.pointSources ? (
+        <>
+          <SectionLabel label="Pontforrások" style={styles.section} />
+          <View style={styles.sampleRow}>
+            <Badge label="Számított" variant="neutral" />
+            <Text className="font-body text-sm text-secondary" style={styles.sampleText}>
+              Nem hivatalos adat – a Kosarstat eseménylistájából számolva.
+            </Text>
+          </View>
+          <TeamSplitList
+            ownName={view.ownName}
+            opponentName={view.opponentName}
+            metrics={view.pointSources}
+            style={styles.list}
+          />
+        </>
+      ) : null}
 
       <SectionLabel label="Döntő tényezők" style={styles.section} />
       {view.decisiveGroups.length > 0 ? (

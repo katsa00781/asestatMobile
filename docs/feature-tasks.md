@@ -179,6 +179,11 @@ előkészítve."), nem általános hálózati hibaként.
 - [x] Post-game H12 (web `157b2b1` … `6cc80b2`, 8 jegyzet): `@core` szinkron,
       `oppDreb` / `oppPossessions` bemenet, döntő tényezők `tone`-ja, FTM-címkék,
       referencia nélküli kis minta (D-124, D-125); Kosarstat-adat ellenőrizve
+- [x] Post-game H13 (web `2100a91`, `856780f`; összesítő:
+      `docs/mobile-sync/2026-10-04-mobil-teendok-osszesito.md`): `@core` szinkron
+      az új `kosarstat-pbp-parse` modullal, pontforrások a Kosarstat
+      eseménylistájából, box score alapmutatók, új büntető-címke és
+      ellenfélprofil-sorok (D-126)
 - [ ] Post-game H12: eszközös próba (iOS + Android) az ASE–Pécs és a
       Szolnok–OSE meccsen – a harness élő adaton lefutott, eszközön még nem
 - [ ] Post-game (döntés): a D-119 szerinti `findOpponentTeam` névtartalék a
@@ -233,6 +238,68 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-10-04 – Post-game: pontforrások és box score alapmutatók (web H13 → mobil)
+
+**Mit:** A `docs/mobile-sync/2026-10-04-mobil-teendok-osszesito.md` 1–3. pontja.
+- **`@core` szinkron** külön commitban (`6610ffb`): a `sync-core` listára
+  felkerült a `kosarstat-pbp-parse`. Változott a `postgame-report` (új típusok,
+  `metrics.boxScore`, `metrics.pointSources`, büntető-címke, „Ellenfél profil”
+  sorok, `\0` escape a nyers NUL bájt helyett) és a `dashboard-types`. A
+  `player-postgame` már egyezett a webbel. A `tsc` elsőre hibátlan volt.
+- **Bemenet** (`lib/postgame-data.ts`, `fetchPointSources`): a meccs
+  `game_events` nyers oldala, majd a táblái (a `fetchClutch` kétlépéses
+  mintája). Az első tábla nyer, amelyikre a `parseKosarstatPointSources` nem
+  `null`-t ad. A `headers` / `rows` tömb voltát a rendszerhatár ellenőrzi. Az
+  eredmény `pointSources`-ként megy a `buildKosarstatPostgameContext`-nek. A
+  lekérdezés hibája üres eredmény, nem hibapanel (D-126).
+- **Nézet** (`lib/postgame-view.ts`, `components/PostgamePanel.tsx`):
+  - „Pontforrások” szekció a dobástérkép után: Második esélyből /
+    Labdaeladásból / Gyors befejezés (≤ 6 mp), saját – ellenfél párban,
+    fölötte „Számított” jelvény és „Nem hivatalos adat – a Kosarstat
+    eseménylistájából számolva.” sor. `pointSources` nélkül a szekció elmarad.
+  - „Box score alapmutatók” szekció a kulcsmutatók után (a jegyzet opcionális
+    pontja): Mezőny %, Büntető %, Lepattanó, Támadó és Védő lepattanó.
+    Ellenfél box score nélkül elmarad.
+  - Mindkettő az új `components/TeamSplitList.tsx`-et használja. Ezt a
+    `LiveTeamStatsPanel`-ből emeltem ki (névsor + `SplitMetricRow` sorok), az
+    élő nézet megjelenése nem változott.
+- **Kódváltozás nélkül:** az új büntető-címke („Büntető-előny / -hátrány az
+  ellenféllel szemben”) a `tone` alapján színeződik. Az összegzés „Ellenfél
+  profil” blokkja 3 sor, az `InsightCard` soronként tördeli.
+
+**Fájlok:** `scripts/sync-core.ts`, `core/kosarstat-pbp-parse.ts` (új),
+`core/postgame-report.ts`, `core/dashboard-types.ts` (szinkron),
+`lib/postgame-data.ts`, `lib/postgame-view.ts`, `types/postgame.ts`,
+`components/TeamSplitList.tsx` (új), `components/LiveTeamStatsPanel.tsx`,
+`components/PostgamePanel.tsx`, `docs/feature-tasks.md`
+**Tesztelve:**
+- `npx tsc --noEmit`, `npm run lint` hibátlan. `npx expo export --platform ios
+  --platform android` lefut, mindkét Hermes bundle elkészül.
+- Scratchpad-harness (jiti + aliasok, anon kliens) a valódi
+  `lib/team-season-stats` → `lib/postgame-data` → `lib/postgame-view` láncon,
+  élő adaton, 6 ASE-meccsen:
+  - **Körmend–ASE** (2026-10-03, 84:95): pontforrások 24–15 / 16–10 / 19–13,
+    az eseménylista pontösszege egyezik a végeredménnyel. „Büntető-hátrány az
+    ellenféllel szemben (FTM rate 16.7% vs 27.1%)” ▼.
+  - **ASE–Pécs** (2026-09-26, 102:77): 17–6 / 27–11 / 26–5. Az „Ellenfél
+    profil” sorai: „mért mutatói”, „Saját támadómutatók a ligamedián alatt”,
+    „Értelmezés”.
+  - Négy 2025/2026-os Kaposvár-meccs: mindegyiken van pontforrás, a vendég
+    nézőpontnál az oldalak helyesen cserélődnek.
+- Módosított bemenettel: eltérő pontösszegnél a szekció elmarad, és a
+  megjegyzések között megjelenik a „… eltér a végeredménytől … a pontforrások
+  kimaradtak” sor. Eseményoldal és Kosarstat-link nélkül a szekció elmarad,
+  megjegyzés nélkül. Ellenfél box score nélkül a box score szekció marad el.
+- A `≤` jel mind a hét csomagolt betűfájl `cmap`-jében megvan (D-097 óta).
+- Eszközön és szimulátoron nem néztem meg.
+
+**Nyitva maradt:**
+- Eszközös próba (iOS + Android) egy Kosarstat-linkelt 2026/27-es meccsen.
+- Az élő nézetet (`LiveTeamStatsPanel`) a kiemelés után csak a típusellenőrzés
+  és a bundle fedi, élő meccsen nem láttam.
+
+**Commit:** `feat: post-game pontforrások és box score alapmutatók`
 
 ## 2026-09-28 – Post-game H12: referencialogika, metrika-definíciók, előjel (web → mobil)
 
@@ -5401,3 +5468,34 @@ szélessége szezonfüggővé válna; (b) a meccsérték önmagában, a szekció
 nélkül: elveszne a meccs kulcsmutató-képe.
 **Visszavonható?** Igen: `lib/postgame-view.ts` `buildPostgameView` /
 `buildBaseline`.
+
+## D-126 – Post-game pontforrások és box score: `TeamSplitList`, makett nélkül
+**Dátum:** 2026-10-04
+**Döntés:**
+1. A pontforrások és a box score alapmutatók saját – ellenfél sorai a
+   jóváhagyott `SplitMetricRow`-val jelennek meg, fölöttük a cián / narancs
+   névsorral. Ezt a `LiveTeamStatsPanel`-ből kiemelt `TeamSplitList` adja, az
+   élő nézet változatlan. Új design token és makett nincs (D-121, D-122
+   mintája).
+2. A „számított, nem hivatalos adat” jelölés egy `neutral` „Számított”
+   `Badge` és egy mondat, a „Kis minta” sor elrendezésében.
+3. A harmadik sor felirata „Gyors befejezés (≤ 6 mp)”, ahogy a weben. A `≤`
+   a D-097 betűcseréje óta megvan a csomagolt fájlokban, a D-075 korlátja erre
+   már nem él.
+4. A `game_events` lekérdezés hibája üres szekció, nem hibapanel (D-122
+   4. pontja szerint).
+5. A jegyzet opcionális box score blokkja is elkészült. Csak százalékot és
+   darabszámot mutat, dobott/kísérlet párt nem.
+
+**Miért:** A két blokk ugyanaz a saját – ellenfél összevetés, mint az élő
+meccsstatisztika, és ott már elfogadott minta van rá. A névsor + sorok páros
+harmadszor is kellett volna, ezért lett közös komponens. A pontforrás
+kiegészítő adat: a hiánya nem viheti el az egész elemzést. A 88 pt-os
+értékdobozba a „31/68 (45.6%)” nem fér be 22 pt-os monóval.
+**Alternatíva:** (a) a web háromkártyás rácsa („24 – 15 (+9)”): új
+elrendezés lenne, makett nélkül; (b) `StatMatrix` két sorral: a saját –
+ellenfél különbség rosszabbul olvasható; (c) `warning` jelvény: a számított
+adat nem hiba, a sárga túl erős jelzés; (d) „Gyors befejezés (6 mp-en
+belül)”: fölösleges eltérés a webtől, ha a glifa megvan.
+**Visszavonható?** Igen: `lib/postgame-view.ts` `buildPointSources` /
+`buildBoxScore` és a `PostgamePanel` két szekciója.

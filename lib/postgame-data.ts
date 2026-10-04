@@ -9,16 +9,19 @@
  *
  * A bemenetek a webes `SeasonComparison` post-game nézetével azonosak (a
  * webprojekt `mobile-sync/2026-09-26-postgame-analysis-spec.md` 2. pontja).
- * A dobástérkép és a mentett játékos-szöveg kiegészítő adat: hibájuk nem teszi
- * használhatatlanná az elemzést, ezért ott a hiba üres eredménnyé válik.
+ * A dobástérkép, a pontforrások és a mentett játékos-szöveg kiegészítő adat:
+ * hibájuk nem teszi használhatatlanná az elemzést, ezért ott a hiba üres
+ * eredménnyé válik.
  */
 import { fetchAllRows } from '@core/fetch-all-rows';
 import type { KosarstatGameClutch } from '@core/kosarstat-clutch-parse';
+import { parseKosarstatPointSources } from '@core/kosarstat-pbp-parse';
 import {
   analyzePostGameReport,
   buildKosarstatPostgameContext,
   buildTeamBenchmarks,
   mergeKosarstatPostgameContext,
+  type KosarstatPointSourceTotals,
   type KosarstatQuarterStatRow,
   type KosarstatTeamMetricRow,
   type KosarstatTeamSide,
@@ -68,6 +71,8 @@ export interface PostgamePayload {
   opponentLines: RawPlayerLine[] | null;
   quarterStats: KosarstatQuarterStatRow[];
   teamMetrics: KosarstatTeamMetricRow[];
+  /** Pontforrások a kosarstat eseménylistájából, hazai / vendég oldalra bontva. */
+  pointSources: KosarstatPointSourceTotals | null;
   shotContext: PostGameShotMapContext | undefined;
   /** Játékos-azonosító → mentett LLM-értékelés. */
   playerReports: Map<string, GameReport>;
@@ -78,6 +83,7 @@ export const EMPTY_POSTGAME: PostgamePayload = {
   opponentLines: null,
   quarterStats: [],
   teamMetrics: [],
+  pointSources: null,
   shotContext: undefined,
   playerReports: new Map(),
 };
@@ -160,6 +166,9 @@ export function buildPostgameReport(input: ReportInput): PostGameReport | null {
         // nem kellenek (a kosarstat-core jegyzet javaslata).
         turnoverTypes: [],
         clutchImportNote: null,
+        // A `@core` rendezi saját / ellenfél oldalra, és csak akkor írja a
+        // riportba, ha az események pontösszege egyezik a végeredménnyel.
+        pointSources: payload.pointSources,
       })
     : buildKosarstatPostgameContext(null);
 
@@ -236,10 +245,11 @@ export async function fetchPostgame(
 ): Promise<PostgamePayload> {
   const statsTable = getSeasonStatsTable(seasonName);
 
-  const [ownResult, opponentLines, kosarstat, shotContext, playerReports] = await Promise.all([
+  const [ownResult, opponentLines, kosarstat, pointSources, shotContext, playerReports] = await Promise.all([
     supabase.from(statsTable).select(LINE_COLUMNS).eq('game_id', game.id),
     fetchOpponentLines(game, seasonId, statsTable),
     fetchKosarstatRows(game, seasonId),
+    fetchPointSources(game, seasonId).catch(() => null),
     fetchShotContext(game, seasonId, teamId).catch(() => undefined),
     fetchPlayerReports(game.id).catch(() => new Map<string, GameReport>()),
   ]);
@@ -250,6 +260,7 @@ export async function fetchPostgame(
     ownLines: toLines(ownResult.data),
     opponentLines,
     ...kosarstat,
+    pointSources,
     shotContext,
     playerReports,
   };
@@ -317,6 +328,52 @@ async function fetchKosarstatRows(
     quarterStats: toQuarterStats(quarterResult.data),
     teamMetrics: toTeamMetrics(metricsResult.data),
   };
+}
+
+/**
+ * A pontforrások nyersanyaga: a kosarstat `game_events` oldalának
+ * eseménytáblája (az, amelyiknek van `home_event` oszlopa). Két lekérdezés,
+ * ahogy a clutch-nál (`hooks/useGameDetails` `fetchClutch`): előbb a legfrissebb
+ * nyers oldal, majd a táblái. Eseményoldal nélkül `null`.
+ */
+async function fetchPointSources(
+  game: TeamGame,
+  seasonId: string,
+): Promise<KosarstatPointSourceTotals | null> {
+  if (!game.kosarstatGameId) return null;
+
+  const { data: rawRows, error: rawError } = await supabase
+    .from('kosarstat_game_pages_raw')
+    .select('id')
+    .eq('season_id', seasonId)
+    .eq('kosarstat_game_id', game.kosarstatGameId)
+    .eq('page_type', 'game_events')
+    .order('imported_at', { ascending: false })
+    .limit(1);
+
+  if (rawError) throw new Error(rawError.message);
+  const raw: unknown = Array.isArray(rawRows) ? rawRows[0] : null;
+  if (!isRecord(raw) || typeof raw.id !== 'string') return null;
+
+  const { data: tables, error: tablesError } = await supabase
+    .from('kosarstat_game_page_tables')
+    .select('rows, headers')
+    .eq('page_raw_id', raw.id)
+    .order('table_index', { ascending: true });
+
+  if (tablesError) throw new Error(tablesError.message);
+  if (!Array.isArray(tables)) return null;
+
+  // A parser `null`-t ad arra a táblára, amelyik nem eseménylista.
+  for (const table of tables as unknown[]) {
+    if (!isRecord(table) || !Array.isArray(table.headers) || !Array.isArray(table.rows)) continue;
+    const headers = table.headers.map((cell) => String(cell ?? '').trim());
+    const rows = table.rows.filter((cells): cells is unknown[] => Array.isArray(cells));
+    const parsed = parseKosarstatPointSources(headers, rows);
+    if (parsed) return parsed;
+  }
+
+  return null;
 }
 
 /**

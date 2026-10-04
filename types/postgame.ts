@@ -16,6 +16,7 @@ import type { AccentTone } from '@/constants/theme';
 import type { GameReport } from '@/types/games';
 import type { MeterEntry } from '@/types/roles';
 import type { PointEntry } from '@/types/scouting';
+import type { SplitMetric } from '@/types/situational';
 
 export interface PostgameKpis {
   /** „85–78" */
@@ -94,6 +95,16 @@ export interface PostgameView {
   kpis: PostgameKpis;
   baseline: BaselineView;
   keyStats: KeyStatRow[];
+  /** A két csapat neve a saját – ellenfél blokkok fölé. */
+  ownName: string;
+  opponentName: string;
+  /** Box score alapmutatók saját – ellenfél párban; ellenfél box score nélkül `null`. */
+  boxScore: SplitMetric[] | null;
+  /**
+   * Pontforrások a Kosarstat eseménylistájából (számított, nem hivatalos adat).
+   * `null`, ha nincs eseményoldal, vagy a pontösszege nem egyezik a végeredménnyel.
+   */
+  pointSources: SplitMetric[] | null;
   shotProfile: MeterEntry[];
   shotMap: ShotMapView | null;
   decisiveGroups: DecisiveGroup[];

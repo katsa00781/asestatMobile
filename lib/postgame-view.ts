@@ -28,6 +28,7 @@ import type {
   ShotMapView,
 } from '@/types/postgame';
 import type { PointEntry } from '@/types/scouting';
+import type { SplitMetric } from '@/types/situational';
 
 /** A kulcsmutatók magyar feliratai a `@core` stabil kulcsai szerint (D-084). */
 const KEY_STAT_LABELS: Record<string, string> = {
@@ -91,6 +92,10 @@ export function buildPostgameView(
           ]
         : [{ value: formatDecimal(metric.game, 1) }, { value: '–' }, { value: '–' }],
     })),
+    ownName: report.teamName,
+    opponentName: report.opponentName,
+    boxScore: buildBoxScore(report),
+    pointSources: buildPointSources(report),
     shotProfile: report.charts.shotProfile.map((datum) => ({
       label: SHOT_PROFILE_LABELS[datum.label] ?? plainText(datum.label),
       note: comparable
@@ -145,6 +150,65 @@ function buildKpis(report: PostGameReport): PostgameView['kpis'] {
     },
     paceText: formatDecimal(pace, 1),
     efgText: `${formatDecimal(efg, 1)}%`,
+  };
+}
+
+/** Egy saját – ellenfél sor nyersen; mindegyiknél a nagyobb érték a jobb. */
+interface SplitSpec {
+  label: string;
+  own: number;
+  opponent: number;
+  /** Százalék (egy tizedes) – egyébként darabszám. */
+  percent?: boolean;
+}
+
+/** A webes „Box score alapmutatók” tábla (FG%, FT%, lepattanók). */
+function buildBoxScore(report: PostGameReport): SplitMetric[] | null {
+  const box = report.metrics.boxScore;
+  if (!box?.opponent) return null;
+  const { own, opponent } = box;
+
+  return [
+    { label: 'Mezőny %', own: own.fgPct, opponent: opponent.fgPct, percent: true },
+    { label: 'Büntető %', own: own.ftPct, opponent: opponent.ftPct, percent: true },
+    { label: 'Lepattanó', own: own.reb, opponent: opponent.reb },
+    { label: 'Támadó lepattanó', own: own.oreb, opponent: opponent.oreb },
+    { label: 'Védő lepattanó', own: own.dreb, opponent: opponent.dreb },
+  ].map(toSplitMetric);
+}
+
+/**
+ * A gyors befejezés nem jegyzőkönyvi gyorsindítás: labdaszerzés vagy
+ * védőlepattanó utáni pont a küszöbön belül – ezért áll a feliratban a küszöb.
+ */
+function buildPointSources(report: PostGameReport): SplitMetric[] | null {
+  const sources = report.metrics.pointSources;
+  if (!sources) return null;
+  const { own, opponent } = sources;
+
+  return [
+    { label: 'Második esélyből', own: own.secondChancePoints, opponent: opponent.secondChancePoints },
+    { label: 'Labdaeladásból', own: own.pointsOffTurnovers, opponent: opponent.pointsOffTurnovers },
+    {
+      label: `Gyors befejezés (≤ ${sources.quickFinishSeconds} mp)`,
+      own: own.quickFinishPoints,
+      opponent: opponent.quickFinishPoints,
+    },
+  ].map(toSplitMetric);
+}
+
+/** A sávok a nagyobb értékhez normalizálódnak, ahogy az élő meccsstatisztikánál. */
+function toSplitMetric(spec: SplitSpec): SplitMetric {
+  const format = (value: number) => (spec.percent ? formatDecimal(value, 1) : String(value));
+  const scale = Math.max(spec.own, spec.opponent);
+
+  return {
+    label: spec.label,
+    homeText: format(spec.own),
+    awayText: format(spec.opponent),
+    homeShare: scale > 0 ? spec.own / scale : 0,
+    awayShare: scale > 0 ? spec.opponent / scale : 0,
+    better: spec.own === spec.opponent ? null : spec.own > spec.opponent ? 'home' : 'away',
   };
 }
 
