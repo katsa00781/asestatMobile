@@ -22,6 +22,7 @@ const MODULES = [
   'fetch-all-rows',
   'situational-analysis',
   'kosarstat-clutch-parse',
+  'kosarstat-pbp-parse',
   'postgame-report',
   'player-analysis',
   'player-postgame',
