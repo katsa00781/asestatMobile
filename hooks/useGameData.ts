@@ -17,7 +17,9 @@ import { useCachedQuery } from '@/hooks/useCachedQuery';
 import { useFilterData } from '@/hooks/useFilterData';
 import { createQueryCache, filterKey } from '@/lib/query-cache';
 import { supabase } from '@/lib/supabase';
+import { findOpponentTeam } from '@/lib/teams';
 import { useFilterStore } from '@/store/filterStore';
+import type { Team } from '@/types/filters';
 import type { Fixture, HomeAway, GameResult, TeamAggregate, TeamGame } from '@/types/games';
 
 /** Ezekre a státuszokra mondjuk, hogy a találkozó még hátravan. */
@@ -59,7 +61,8 @@ export function useGameData(): GameDataResult {
   const seasonId = useFilterStore((state) => state.selectedSeasonId);
   const teamId = useFilterStore((state) => state.selectedTeamId);
 
-  // A fixtures csak csapat-azonosítót tárol, a nevek a szűrő listájából jönnek.
+  // A fixtures csak csapat-azonosítót tárol, a nevek a szűrő listájából jönnek –
+  // és a lejátszott meccsek ellenfelének neve is (D-127).
   const {
     teams,
     error: filterError,
@@ -104,7 +107,7 @@ export function useGameData(): GameDataResult {
 async function fetchGameData(
   seasonId: string,
   teamId: string,
-  teams: { id: string; name: string }[],
+  teams: Team[],
 ): Promise<GameDataPayload> {
   const today = todayIso();
 
@@ -137,7 +140,7 @@ async function fetchGameData(
   ]);
 
   return {
-    games: toGames(gameRows),
+    games: toGames(gameRows, teams),
     fixtures: toFixtures(fixtureRows, teamId, teams),
   };
 }
@@ -199,20 +202,25 @@ function toRound(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function toGames(rows: unknown[]): TeamGame[] {
+function toGames(rows: unknown[], teams: Team[]): TeamGame[] {
   return rows.flatMap((row: unknown) => {
     if (!isRecord(row)) return [];
     const { id, date, opponent, home_away, result } = row;
     if (typeof id !== 'string' || typeof date !== 'string') return [];
     if (!isHomeAway(home_away) || !isResult(result)) return [];
 
+    const recordedName = typeof opponent === 'string' ? opponent : 'Ismeretlen ellenfél';
+    const opponentTeamId = typeof row.opponent_team_id === 'string' ? row.opponent_team_id : null;
+
     return [
       {
         id,
         date,
         round: toRound(row.round),
-        opponent: typeof opponent === 'string' ? opponent : 'Ismeretlen ellenfél',
-        opponentTeamId: typeof row.opponent_team_id === 'string' ? row.opponent_team_id : null,
+        // A csapatlista neve a mérvadó: a `games.opponent` a meccs kori nevet
+        // őrzi, így ugyanaz a csapat két néven is szerepelne (D-127).
+        opponent: findOpponentTeam(teams, opponentTeamId, recordedName)?.name ?? recordedName,
+        opponentTeamId,
         homeAway: home_away,
         ourScore: toNumber(row.our_score),
         oppScore: toNumber(row.opp_score),

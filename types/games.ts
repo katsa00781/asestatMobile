@@ -17,7 +17,10 @@ export interface TeamGame {
   /** ISO nap (`2026-05-25`) – a tábla nem tárol időpontot. */
   date: string;
   round: number | null;
-  /** Az ellenfél neve szövegesen, ahogy a `games` tábla tárolja. */
+  /**
+   * Az ellenfél neve: a csapatlista `teams.name`-je. Ha a sor csapata nem
+   * oldható fel, a `games.opponent` meccs kori szövege marad (D-127).
+   */
   opponent: string;
   /**
    * Az ellenfél csapat-azonosítója. Csapatot ezzel azonosítunk, nem a

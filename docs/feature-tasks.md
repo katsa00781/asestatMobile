@@ -184,6 +184,9 @@ előkészítve."), nem általános hálózati hibaként.
       az új `kosarstat-pbp-parse` modullal, pontforrások a Kosarstat
       eseménylistájából, box score alapmutatók, új büntető-címke és
       ellenfélprofil-sorok (D-126)
+- [x] Meccslista és meccskártyák: az ellenfél neve a csapatlistából jön az
+      `opponent_team_id` alapján, a `games.opponent` szöveg csak a fel nem
+      oldható sorra tartalék (web `58c12e9`, D-127)
 - [ ] Post-game H12: eszközös próba (iOS + Android) az ASE–Pécs és a
       Szolnok–OSE meccsen – a harness élő adaton lefutott, eszközön még nem
 - [ ] Post-game (döntés): a D-119 szerinti `findOpponentTeam` névtartalék a
@@ -238,6 +241,34 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-10-04 – Meccslista: az ellenfél neve a csapatlistából (web `58c12e9` → mobil)
+
+**Mit:** Az összesítő 4. pontjának A döntése (felhasználói döntés: igen). A
+`useGameData` `toGames`-e a `TeamGame.opponent` mezőbe a csapatlista
+`teams.name`-jét írja, a `lib/teams.ts` `findOpponentTeam`-jével (ID, ID
+nélküli sornál névegyezés). Ha a csapat nem oldható fel, a `games.opponent`
+meccs kori szövege marad. Mivel a mező egy helyen áll elő, a `GameRow`, a
+`LastGameCard`, a `GameScoreCard`, a meccs részletei és a post-game fejléc és
+szövegek is a feloldott nevet kapják, komponens nem változott. A
+`PlayerGameLog` eddig is ID alapján oldott fel (rövid névre, a
+`usePlayerDetails`-ben), ott nincs változás.
+**Fájlok:** `hooks/useGameData.ts`, `types/games.ts`, `docs/feature-tasks.md`
+**Tesztelve:**
+- `npx tsc --noEmit`, `npm run lint` hibátlan.
+- Scratchpad-harness a valódi `findOpponentTeam`-mel, az ASE élő `games`
+  sorain:
+  - 2025/2026: 39 meccs, 15 helyett 13 különböző ellenfélnév. A 3
+    „Szolnoki Olajbányász” sor „NHSZ-Szolnoki Olajbányász” lett, az 1 „Endo
+    Plus Service-Honvéd” sor „Budapesti Honvéd Sportegyesület”.
+  - 2024/2025: 26 meccs, 8 sor kapja a mai nevet (Honvéd, Falco, Szedeák, OSE).
+  - 2026/2027: 2 meccs, nincs eltérés.
+  - Mindhárom szezonban minden sor ID alapján oldódik fel (ID nélküli: 0).
+- Eszközön és szimulátoron nem néztem meg.
+
+**Nyitva maradt:** A leghosszabb név („Budapesti Honvéd Sportegyesület”)
+tördelését a `GameRow`-ban és a kártyákon eszközön kell megnézni.
+**Commit:** `feat: a meccsek ellenfélneve a csapatlistából, opponent_team_id alapján`
 
 ## 2026-10-04 – Post-game: pontforrások és box score alapmutatók (web H13 → mobil)
 
@@ -5499,3 +5530,24 @@ adat nem hiba, a sárga túl erős jelzés; (d) „Gyors befejezés (6 mp-en
 belül)”: fölösleges eltérés a webtől, ha a glifa megvan.
 **Visszavonható?** Igen: `lib/postgame-view.ts` `buildPointSources` /
 `buildBoxScore` és a `PostgamePanel` két szekciója.
+
+## D-127 – A meccsek ellenfélneve a csapatlistából jön, nem a `games.opponent`-ből
+**Dátum:** 2026-10-04
+**Döntés:** A `TeamGame.opponent` a `teams.name`, az `opponent_team_id`
+alapján feloldva (`findOpponentTeam`). A `games.opponent` szöveg csak akkor
+marad, ha a csapat nem oldható fel. A feloldás egy helyen, a `useGameData`
+`toGames`-ében történik. Felhasználói döntés (2026-10-04), a D-119
+kiterjesztése a megjelenített névre.
+**Miért:** A `games.opponent` a meccs kori nevet őrzi, ezért ugyanaz a csapat
+egy szezonon belül két néven jelent meg (2025/2026: „Szolnoki Olajbányász” és
+„NHSZ-Szolnoki Olajbányász”). A web exportja már ID alapján old fel
+(`58c12e9`). Az egy helyen történő feloldás miatt a lista, a kártyák és a
+post-game szövegek ugyanazt a nevet írják.
+**Alternatíva:** (a) marad a meccs kori szöveg: a duplikált név megmarad;
+(b) feloldás komponensenként: négy hely, és a post-game szövegek kimaradnának;
+(c) rövid név a listában: a meccssor eddig is teljes nevet mutatott, ez
+külön megjelenési változás lenne.
+**Következmény:** Régi szezon meccsein is a mai csapatnév látszik (pl. a
+2024/2025-ös „Endo Plus Service-Honvéd” sor „Budapesti Honvéd
+Sportegyesület”). A mentett AI riportszövegek a régi nevet őrzik.
+**Visszavonható?** Igen: `hooks/useGameData.ts` `toGames`, egy sor.
