@@ -10,7 +10,7 @@
       "supportsTablet": true,
       "requireFullScreen": true,
       "bundleIdentifier": "hu.ase.asestats",
-      "buildNumber": "11",
+      "buildNumber": "12",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
