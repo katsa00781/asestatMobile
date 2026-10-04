@@ -187,6 +187,18 @@ előkészítve."), nem általános hálózati hibaként.
 - [x] Meccslista és meccskártyák: az ellenfél neve a csapatlistából jön az
       `opponent_team_id` alapján, a `games.opponent` szöveg csak a fel nem
       oldható sorra tartalék (web `58c12e9`, D-127)
+- [x] Versenyszakasz-jelölés (alapszakasz / rájátszás) a meccslistában: most
+      nem készül, a `competitionPhase` mező és a `classifyPhase` szabály nem
+      kerül át (web `58c12e9`, `702d694`; D-128)
+- [x] Adat-ellenőrzés kódváltozás nélkül (5 jegyzet): 2025/2026 takarítás,
+      játékosnevek ékezetes nagybetűi, ASE `is_primary`, dobástérkép
+      deduplikálás, Kosarstat-linkek a 2026-09-25-i meccseken – élő adaton
+      mind rendben; az `OWN_TEAM_NAMES` névtartalék marad (D-129)
+- [ ] Eszközös próba (iOS + Android) a 2026-10-04-i átvezetésre: post-game egy
+      Kosarstat-linkelt 2026/27-es meccsen (Pontforrások, Box score
+      alapmutatók, 3 soros ellenfélprofil), a 2025/2026-os meccslista (39 meccs,
+      egységes ellenfélnevek, a hosszú „Budapesti Honvéd Sportegyesület”
+      tördelése), és a 2026-09-25-i meccsek Kosarstat-blokkja
 - [ ] Post-game H12: eszközös próba (iOS + Android) az ASE–Pécs és a
       Szolnok–OSE meccsen – a harness élő adaton lefutott, eszközön még nem
 - [ ] Post-game (döntés): a D-119 szerinti `findOpponentTeam` névtartalék a
@@ -241,6 +253,48 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-10-04 – A 2026-10-04-i mobil teendők lezárása: adat-ellenőrzés és döntések
+
+**Mit:** A `docs/mobile-sync/2026-10-04-mobil-teendok-osszesito.md` 4–6.
+pontja. A kód a két előző bejegyzés commitjaiban ment be (`6610ffb`,
+`e3e8c62`, `5af81c6`); itt az ellenőrzések és a döntések vannak.
+- **Döntések** (felhasználó, 2026-10-04): A = igen (D-127, előző bejegyzés);
+  B = most nem; C = nem aktuális. A versenyszakasz-jelölés nem készül (D-128).
+- **5.1 – 2025/2026 takarítás:** ASE 39 meccs, a legkorábbi 2025-09-27.
+  Halmai Dániel `games_played` = 37 a `player_season_stats_by_season`-ben.
+  Perzisztált szezonadat-gyorsítótár nincs: a lekérdezés-cache modulszintű
+  memória (D-026), az AsyncStorage-ban csak a szűrő két azonosítója és a
+  session van. Újraindítás vagy pull-to-refresh elég.
+- **5.2 – játékosnevek:** a 2025/2026-os 206 és a 2026/2027-es 148 névben
+  nincs kevert kis-/nagybetűs vezetéknév. A mobilban nincs a hibás alakra
+  épülő kód: a `shortenPlayerName` nem nyúl a betűkhöz, névalapú
+  játékospárosítás nincs.
+- **5.3 – ASE alapcsapat:** `is_primary = true` egyedül az `Atomerőmű SE`
+  soron (`ff4710a9-…`). A `defaultTeam` első ága ezt választja. Az
+  `OWN_TEAM_NAMES` névtartalék marad (D-129).
+- **5.4 – dobástérkép:** az ASE–Pécs nyers sorához 125 esemény tartozik, ebből
+  73 az ASE-é. A post-game `shotMap.available = true`, „Kísérletek: 73”. A
+  mobil kódban nincs `event_count` hivatkozás.
+- **5.5 – Kosarstat-linkek:** a 2026-09-25-i 6 `games` sor mind linkelt.
+  Mindegyiknél 8 negyedsor és 2 metrikasor jön `home` / `away` oldallal, és a
+  `parseGameClutch` mind a hat nézőpontból ad clutch-bontást.
+
+**Fájlok:** `docs/feature-tasks.md`,
+`docs/mobile-sync/2026-10-04-mobil-teendok-osszesito.md` (új a repóban,
+állapot: ÁTVEZETVE). A webprojektben: a 9 forrásjegyzet `Állapot` sora és a
+`CLAUDE.md` `@core` listája (`kosarstat-pbp-parse`).
+**Tesztelve:** Scratchpad-harness (jiti + aliasok, anon kliens), élő adaton,
+csak olvasással. A lekérdezések a mobil saját lekérdezéseivel azonos táblákra
+és szűrőkre mentek. Eszközön és szimulátoron nem néztem meg.
+**Nyitva maradt:**
+- Eszközös próba (iOS + Android), lásd a „Web → mobil szinkron” új sorát.
+- Webes oldalon nyitott, mobil teendő nélkül: 138 `hunbasket_shotchart_raw`
+  sor (`season_slug = x2425`) még a 2025/2026 szezon alatt áll.
+- A 2024/25-ös „Révész Ádám” és a 25/26+ „RÉVÉSZ Ádám” alak eltér. A mobilt
+  nem érinti, mert nincs névalapú párosítás.
+
+**Commit:** `docs: a 2026-10-04-i mobil teendők lezárása – adat-ellenőrzés, D-128, D-129`
 
 ## 2026-10-04 – Meccslista: az ellenfél neve a csapatlistából (web `58c12e9` → mobil)
 
@@ -5551,3 +5605,37 @@ külön megjelenési változás lenne.
 2024/2025-ös „Endo Plus Service-Honvéd” sor „Budapesti Honvéd
 Sportegyesület”). A mentett AI riportszövegek a régi nevet őrzik.
 **Visszavonható?** Igen: `hooks/useGameData.ts` `toGames`, egy sor.
+
+## D-128 – Versenyszakasz-jelölés a meccslistában most nem készül
+**Dátum:** 2026-10-04
+**Döntés:** A mobil meccslista nem különbözteti meg az alapszakaszt és a
+rájátszást. A `TeamGame` nem kap `competitionPhase` mezőt, a tükörmeccs-link
+lekérdezése és a web `classifyPhase` szabálya nem kerül át, és a szabály nem
+költözik `@core` modulba. Felhasználói döntés (2026-10-04).
+**Miért:** A meccssor a fordulót sem mutatja (D-045), a jelölésre nincs
+elfogadott mockup. A helyes besoroláshoz két plusz lekérdezés kellene a
+listán (Kosarstat-címkék és az ellenfél-nézetű `games` sorok), plusz a
+háromlépéses szabály a link nélküli helyosztókra. A `round` önmagában
+félrevezetne (a „3. helyért” sorozat `round = 3`).
+**Alternatíva:** (a) `Badge` a rájátszás-meccseken: új UI elem makett nélkül;
+(b) a lejátszott meccsek „Rájátszás” / „Alapszakasz” szekcióra bontva a
+`SectionLabel`-lel: új vizuális elem nem kell, de a besorolási logika
+ugyanúgy; (c) a szabály saját mobil másolata: két helyen élne.
+**Ha újranyílik:** a szabály a weben kerüljön `@core` modulba és a `sync-core`
+listára, ne másolat készüljön. A részletek az összesítő 4. pontjában vannak.
+**Visszavonható?** Igen, a döntés nem zár ki semmit: a `dashboard-types`
+`competitionPhase` mezője már a `core/`-ban van.
+
+## D-129 – Az `OWN_TEAM_NAMES` névtartalék az `is_primary` mellett is marad
+**Dátum:** 2026-10-04
+**Döntés:** A `defaultTeam()` sorrendje változatlan: `is_primary` →
+`OWN_TEAM_NAMES` névegyezés → a lista első eleme. A webes `cfbf698` óta az
+`Atomerőmű SE` soron `is_primary = true` áll, így az első ág dönt, a
+névegyezés csak tartalék.
+**Miért:** A D-013 óta egyszer már eltűnt a jelölés egy csapat-átalakításnál.
+Ha ez megismétlődik, tartalék nélkül az app a névsor első csapatával
+(„Alba Fehérvár”) nyílna. A tartalék két sor, és nem fut le, amíg a jelölés
+megvan.
+**Alternatíva:** A tartalék kivezetése: kevesebb kód, de egy adathiba
+azonnal látható hibává válna egy ASE-belsős appban.
+**Visszavonható?** Igen: `hooks/useFilterData.ts` `defaultTeam`.
