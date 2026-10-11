@@ -268,6 +268,19 @@ Sablon:
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
 
+## 2026-10-11 – A H17 és a H18 mobil-sync jegyzet lezárása
+
+**Mit:** A `docs/mobile-sync/` két nyitott jegyzete
+(`2026-10-10-postgame-riport-javitasok.md`,
+`2026-10-11-postgame-riport-h18.md`) bekerült a repóba, kipipált teendőkkel,
+`ÁTVEZETVE` állapottal és „Átvezetés eredménye” szakasszal. A kód a két előző bejegyzés commitjaiban ment be (`d07617f`,
+`db96c6f`, `46ca3bd`). Nyitott mobil-sync jegyzet nem maradt.
+**Fájlok:** `docs/mobile-sync/2026-10-10-postgame-riport-javitasok.md`,
+`docs/mobile-sync/2026-10-11-postgame-riport-h18.md`, `docs/feature-tasks.md`
+**Tesztelve:** Csak dokumentáció.
+**Nyitva maradt:** Eszközös próba (iOS + Android) a 2026-10-11-i átvezetésre.
+**Commit:** `docs: a H17 és a H18 mobil-sync jegyzet lezárása`
+
 ## 2026-10-11 – Post-game H18: szakaszolt összefoglaló, box score bővítés (web → mobil)
 
 **Mit:** A `docs/mobile-sync/2026-10-11-postgame-riport-h18.md` teendői. A
