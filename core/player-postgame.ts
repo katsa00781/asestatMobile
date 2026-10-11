@@ -173,15 +173,56 @@ const mapImpactLabel = (impactClass: PlayerImpactClass) => {
   }
 };
 
-const mapContextualImpactLabel = (impactClass: PlayerImpactClass, context: DerivedPlayerContext) => {
+/** Az „alappillér” (`engine`) osztály Impact score küszöbe. */
+const ENGINE_MIN_SCORE = 52;
+
+/** Elég játékidő az `engine` osztályhoz: 16 perc, kezdőnél 12. */
+const hasEngineMinutes = (minutes: number, isStarter: boolean) => minutes >= 16 || (isStarter && minutes >= 12);
+
+/** A „Hatékony szerepjátékos” küszöbei: VAL/36, TS% és játékidő alacsony usage mellett. */
+const ROLE_PLAYER_MIN_VAL_PER36 = 18;
+const ROLE_PLAYER_MIN_TS_PCT = 55;
+const ROLE_PLAYER_MIN_MINUTES = 12;
+
+/**
+ * Hatékony szerepjátékos: alacsony usage (≤ 15%) mellett erős és hatékony
+ * termelés. Az Impact score-ban a usage 20%-ot ér, ezért az ilyen játékos
+ * pontszáma a „Limitált hatás” sávba csúszhat, miközben a meccsszintű
+ * kiemelések közt „Kiugró teljesítmény” – a két szabály ne mondjon ellent.
+ */
+const isEfficientRolePlayer = (context: DerivedPlayerContext, minutes: number) =>
+  context.usageTier === 'low' &&
+  minutes >= ROLE_PLAYER_MIN_MINUTES &&
+  context.valPer36 >= ROLE_PLAYER_MIN_VAL_PER36 &&
+  context.tsPct >= ROLE_PLAYER_MIN_TS_PCT;
+
+/**
+ * A címke rangja mindig az impact osztályt követi; a szerep és a játékidő csak
+ * jelző. Kivétel a „Hatékony szerepjátékos”: az szerepet nevez meg (alacsony
+ * usage melletti hatékony termelés), nem rangot. (A korábbi szabály a padról jövő `engine`-t „Rotációs
+ * hozzájárulás”-ra, a sokat játszó kezdő `support`-ot „Stabil alappillér”-re
+ * írta át, így a magasabb Impact score alacsonyabb rangú címkét kaphatott.)
+ * Ha valaki az alappillér-szintű pontszámot kevés percben éri el, a címke ezt
+ * kimondja – különben a sorrendben fölötte álló, de alacsonyabb címkéjű sor
+ * megmagyarázatlan ellentmondásnak látszik.
+ */
+const mapContextualImpactLabel = (
+  impactClass: PlayerImpactClass,
+  context: DerivedPlayerContext,
+  impactScore: number,
+  minutes: number
+) => {
   if (impactClass === 'mvp' && context.usageTier === 'low') {
     return 'Hatékony szerepjátékos';
   }
-  if (impactClass === 'engine' && !context.isStarter) {
-    return 'Rotációs hozzájárulás';
+  if (impactClass === 'support' && isEfficientRolePlayer(context, minutes)) {
+    return 'Hatékony szerepjátékos';
   }
-  if (impactClass === 'support' && context.isStarter && context.minutesBucket === 'heavy') {
-    return 'Stabil alappillér';
+  if (impactClass === 'engine' && !context.isStarter) {
+    return 'Stabil alappillér (padról)';
+  }
+  if (impactClass === 'support' && impactScore >= ENGINE_MIN_SCORE && !hasEngineMinutes(minutes, context.isStarter)) {
+    return 'Rotációs hozzájárulás (rövid percben)';
   }
   return mapImpactLabel(impactClass);
 };
@@ -322,10 +363,11 @@ const classifyImpact = (
   const eligibleForMvp = minutes >= 22 && (context.isStarter || context.minutesBucket === 'heavy');
   if (eligibleForMvp && score >= 68) return 'mvp';
 
-  const eligibleForEngine = minutes >= 16 || (context.isStarter && minutes >= 12);
-  if (eligibleForEngine && score >= 52) return 'engine';
+  if (hasEngineMinutes(minutes, context.isStarter) && score >= ENGINE_MIN_SCORE) return 'engine';
 
   if (score >= 38) return 'support';
+  // Alacsony usage melletti hatékony termelés nem „Limitált hatás”.
+  if (isEfficientRolePlayer(context, minutes)) return 'support';
   return 'struggling';
 };
 
@@ -422,7 +464,7 @@ export const buildPlayerPostGameReport = (
     appendShotMapSignals(strengths, issues, focus, shotMapContext?.[player.playerId]);
     const impactTags = buildImpactTags(player, context);
     const impactClass = classifyImpact(impactScore, context, player.minutes, maxScoreInGame);
-    const impactLabel = mapContextualImpactLabel(impactClass, context);
+    const impactLabel = mapContextualImpactLabel(impactClass, context, impactScore, player.minutes);
 
     return {
       playerId: player.playerId,
