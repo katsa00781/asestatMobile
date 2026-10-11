@@ -180,6 +180,11 @@ function ShotMapSection({ shotMap }: { shotMap: ShotMapView }) {
   return (
     <>
       <SectionLabel label="Dobástérkép" style={styles.section} />
+      {shotMap.coverageNote ? (
+        <Text className="font-body text-sm text-secondary" style={styles.note}>
+          {shotMap.coverageNote}
+        </Text>
+      ) : null}
       <GlowCard corner="lg" padding={14} style={styles.block}>
         <View style={styles.shotTitle}>
           <Crosshair size={16} color={accentColor.cyan} strokeWidth={2} />

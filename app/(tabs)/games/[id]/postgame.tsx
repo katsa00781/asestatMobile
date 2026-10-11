@@ -29,11 +29,12 @@ export default function PostgameScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { selectedTeam } = useFilterData();
-  const { game, report, playerReports, loading, error, reload } = usePostgameAnalysis(id ?? '');
+  const { game, analysis, playerReports, loading, error, reload } = usePostgameAnalysis(id ?? '');
 
   const view = useMemo(
-    () => (report ? buildPostgameView(report, playerReports) : null),
-    [playerReports, report],
+    () =>
+      analysis ? buildPostgameView(analysis.report, analysis.nextFocus, playerReports) : null,
+    [analysis, playerReports],
   );
 
   const ready = !error && !loading;

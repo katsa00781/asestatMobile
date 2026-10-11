@@ -40,6 +40,8 @@ export interface ShotMapView {
   efficiency: StatListItem[];
   zoneColumns: MatrixColumn[];
   zoneRows: MatrixRow[];
+  /** Figyelmeztető sor, ha a dobásszám eltér a box score mezőnykísérleteitől; egyébként `null`. */
+  coverageNote: string | null;
   /** Alacsony mintánál figyelmeztető sor, egyébként `null`. */
   sampleNote: string | null;
 }

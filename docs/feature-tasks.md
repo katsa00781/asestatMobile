@@ -194,6 +194,11 @@ előkészítve."), nem általános hálózati hibaként.
       játékosnevek ékezetes nagybetűi, ASE `is_primary`, dobástérkép
       deduplikálás, Kosarstat-linkek a 2026-09-25-i meccseken – élő adaton
       mind rendben; az `OWN_TEAM_NAMES` névtartalék marad (D-129)
+- [x] Post-game H17 (web `08b0da3`, `f3ffea7`; jegyzet:
+      `docs/mobile-sync/2026-10-10-postgame-riport-javitasok.md`): `@core`
+      szinkron, közös „Következő fókusz” lista (`buildPostgameAutoFocus`),
+      `expectedPoints` bemenet, festék-arány sor és dobástérkép-lefedettség
+      (D-130, D-131)
 - [ ] Eszközös próba (iOS + Android) a 2026-10-04-i átvezetésre: post-game egy
       Kosarstat-linkelt 2026/27-es meccsen (Pontforrások, Box score
       alapmutatók, 3 soros ellenfélprofil), a 2025/2026-os meccslista (39 meccs,
@@ -253,6 +258,68 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-10-11 – Post-game H17: közös fókuszlista, festék-szabály, dobástérkép-lefedettség (web → mobil)
+
+**Mit:** A `docs/mobile-sync/2026-10-10-postgame-riport-javitasok.md` teendői.
+- **`@core` szinkron** külön commitban (`d07617f`): `postgame-report`,
+  `player-postgame`. Egy szinkron a H17 és a H18 változásait együtt hozta. A
+  `tsc` elsőre hibátlan volt.
+- **Bemenet** (`lib/postgame-data.ts`):
+  - a `buildKosarstatPostgameContext` megkapja az `expectedPoints`-ot
+    (`game.ourScore` / `game.oppScore`);
+  - a `buildPostgameReport` mostantól `PostgameAnalysis`-t ad: a riportot és a
+    `buildPostgameAutoFocus(report, kosarstat)` listáját (D-130). A hook
+    `analysis`-ként adja tovább, a képernyő ebből hívja a nézetmodellt.
+- **Nézet** (`lib/postgame-view.ts`, `components/PostgamePanel.tsx`):
+  - a „Következő fókusz” kártya a közös listát mutatja (legfeljebb 3 pont,
+    az első az ellenfél-specifikus fókusz), nem a nyers `report.nextFocus`-t;
+  - a dobástérkép arányai közé bekerült a „Festék arány” sor (D-131);
+  - ha a dobástérkép dobásszáma eltér a box score-étól, a kártya fölött
+    figyelmeztető sor áll, a web szövegével. A H18-as `missingDetail` már
+    benne van zárójelben.
+- **Kódváltozás nélkül:**
+  - festék-szabály (2. pont): a szövegek a `strengths` / `problems` /
+    döntő tényezők sorain át frissülnek;
+  - impact címkék (4. pont): a mobil sehol nem szűr és nem színez a címke
+    szövege alapján. A játékoskártya jelvénye mindig cián, a kiemelés-kártyáé
+    a kártya hangneme;
+  - Net/40 és a 0:00 idejű sor (7. pont): a mobil nem mutat ötös-táblát.
+
+**Fájlok:** `core/postgame-report.ts`, `core/player-postgame.ts` (szinkron),
+`lib/postgame-data.ts`, `lib/postgame-view.ts`, `types/postgame.ts`,
+`hooks/usePostgameAnalysis.ts`, `app/(tabs)/games/[id]/postgame.tsx`,
+`components/PostgamePanel.tsx`, `docs/feature-tasks.md`
+**Tesztelve:**
+- `npx tsc --noEmit`, `npm run lint` hibátlan.
+- Scratchpad-harness (jiti + aliasok, anon kliens, csak olvasás) a valódi
+  `lib/team-season-stats` → `lib/postgame-data` → `lib/postgame-view` láncon,
+  élő adaton:
+  - **ASE–Sopron** (2026-10-10, 109:80): a fókusz-kártya 3 pontja egyezik az
+    összefoglaló „Következő fókusz” blokkjával, az első az
+    „Ellenfél-specifikus fókusz: Periméter-kockázat (ellenfél 3P 9/23, 39.1%
+    …)”. Címkék a jegyzet szerint: Halmai „Stabil alappillér (padról)”, Joseph
+    „Stabil alappillér”, Eilingsfeld „Rotációs hozzájárulás (rövid percben)”.
+    Festék arány 6.3% (−7.7), gyűrű 39.7% (+6.5). Lefedettség: „1 dobás
+    hiányzik a dobástérképről: 63 dobás a box score 64 mezőnykísérletével
+    szemben (a box score szerint: 1 értékesített hárompontos) …”.
+  - További 9 meccs (2026/27: Körmend, Pécs; 2025/26: hét meccs, köztük
+    Kosarstat-link és dobástérkép nélküli is): a kártya és az összefoglaló
+    fókuszblokkja mindenhol egyezik, legfeljebb 3 pont. Egyező dobásszámnál
+    és dobástérkép nélkül a lefedettség-sor elmarad.
+- Eszközön és szimulátoron nem néztem meg.
+
+**Nyitva maradt:**
+- Eszközös próba (iOS + Android): a 37 karakteres „Rotációs hozzájárulás
+  (rövid percben)” jelvény a játékoskártyán és a kiemelés-kártyán. A `Badge`
+  egysoros; ha nem fér ki, a végét levágja.
+- A jegyzet példaszámai (liga medián 35.0%, szezon OREB% 42.1%) eltérnek az
+  élő adattól (33.5%, 45.0%). A mobil a H12-es definícióval számol: 45 saját
+  támadó / (45 + 55 ellenfél védő) lepattanó = 45.0%. A 42.1% a saját védő
+  lepattanóval (62) jönne ki – a webes példa valószínűleg más adatállapotból
+  vagy ellenfél-összeg nélküli futásból származik. Mobil teendő nincs.
+
+**Commit:** `feat: post-game H17 átvezetése – közös fókuszlista, festék-arány, dobástérkép-lefedettség`
 
 ## 2026-10-04 – A 2026-10-04-i mobil teendők lezárása: adat-ellenőrzés és döntések
 
@@ -5639,3 +5706,44 @@ megvan.
 **Alternatíva:** A tartalék kivezetése: kevesebb kód, de egy adathiba
 azonnal látható hibává válna egy ASE-belsős appban.
 **Visszavonható?** Igen: `hooks/useFilterData.ts` `defaultTeam`.
+
+## D-130 – A post-game fókuszlista a riporttal együtt jön az adatrétegből (`PostgameAnalysis`)
+**Dátum:** 2026-10-11
+**Döntés:** A `lib/postgame-data` `buildPostgameReport`-ja `{ report,
+nextFocus }` párt ad. A `nextFocus` a `@core` `buildPostgameAutoFocus(report,
+kosarstat)` listája. A `buildPostgameView` paraméterként kapja, és a
+„Következő fókusz” kártya ezt mutatja a nyers `report.nextFocus` helyett.
+**Miért:** A közös lista a kosarstat kontextus fókusz- és problémasoraiból is
+válogat, az pedig csak az adatrétegben létezik, a riportba nem kerül be. A
+`@core` az összefoglaló fókuszblokkját ugyanebből a függvényből írja, így a
+kártya és az összefoglaló nem térhet el (web H17 5. pont, H18 2. pont).
+**Alternatíva:** (a) a lista kiolvasása az összefoglaló „Következő fókusz”
+szakaszából: szövegre épülne, és a „Nincs kiemelt fókusz.” helyőrzőt külön
+kellene kezelni; (b) a `report.nextFocus` felülírása a közös listával: a
+függvény nem idempotens, a riport mezője mást jelentene, mint a `@core`-ban;
+(c) a teljes kosarstat kontextus továbbadása a nézetnek: a nézetmodell csak
+ezt az egy listát használná belőle.
+**Visszavonható?** Igen: `lib/postgame-data.ts` `PostgameAnalysis`, a hook
+`analysis` mezője és a `buildPostgameView` második paramétere.
+
+## D-131 – Dobástérkép: „Festék arány” sor és lefedettség-sor a kártya fölött
+**Dátum:** 2026-10-11
+**Döntés:**
+1. A dobástérkép arányai között a gyűrű után „Festék arány” sor áll
+   (`paintRate` / `paintRateDelta`). A web négy aránya mellett ez a mobilban
+   ötödik sor.
+2. Ha a dobástérkép dobásszáma eltér a box score mezőnykísérleteitől
+   (`shotMap.coverage.missing !== 0`), a szekciócím alatt, a kártya fölött
+   egy `text.secondary` sor jelzi, a web szövegével. Ugyanez az eltérés a
+   képernyő tetején, az adatmegjegyzések között is szerepel.
+
+**Miért:** A gyűrű, a középtáv és a hármas aránya eddig nem adott ki 100%-ot,
+a festék zóna hiányzott, miközben a `@core` „festék” állításai már a gyűrű +
+festék zónára épülnek. A lefedettség ott kell, ahol a zónaszámokat olvassák: a
+megjegyzés-bekezdés a képernyő tetején van, négy szekcióval feljebb.
+**Alternatíva:** (a) a web négy aránya változatlanul: az összeg továbbra sem
+100%; (b) `warning` jelvény a lefedettség-sor elé, a „Kis minta” mintájára:
+egy-két hiányzó dobás nem hiba, a sárga túl erős jelzés (D-126 2. pontja);
+(c) csak az adatmegjegyzés: a dobástérképnél nem látszik.
+**Visszavonható?** Igen: `lib/postgame-view.ts` `buildShotMap` /
+`coverageNote` és a `ShotMapSection` egy sora.

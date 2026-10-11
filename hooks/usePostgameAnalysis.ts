@@ -14,8 +14,6 @@
  */
 import { useMemo } from 'react';
 
-import type { PostGameReport } from '@core/postgame-report';
-
 import { useCachedQuery } from '@/hooks/useCachedQuery';
 import { useFilterData } from '@/hooks/useFilterData';
 import { useGameDetails } from '@/hooks/useGameDetails';
@@ -24,6 +22,7 @@ import {
   buildPostgameReport,
   EMPTY_POSTGAME,
   fetchPostgame,
+  type PostgameAnalysis,
   type PostgamePayload,
 } from '@/lib/postgame-data';
 import { createQueryCache } from '@/lib/query-cache';
@@ -31,7 +30,8 @@ import type { GameReport, TeamGame } from '@/types/games';
 
 interface PostgameResult {
   game: TeamGame | null;
-  report: PostGameReport | null;
+  /** A riport és a megjelenített fókuszlista; adat híján `null`. */
+  analysis: PostgameAnalysis | null;
   playerReports: Map<string, GameReport>;
   loading: boolean;
   error: string | null;
@@ -63,7 +63,7 @@ export function usePostgameAnalysis(gameId: string): PostgameResult {
     errorLabel: 'A post-game elemzés betöltése sikertelen',
   });
 
-  const report = useMemo(() => {
+  const analysis = useMemo(() => {
     if (!game || !seasonName || !teamId || data.ownLines.length === 0) return null;
     return buildPostgameReport({
       game,
@@ -79,7 +79,7 @@ export function usePostgameAnalysis(gameId: string): PostgameResult {
 
   return {
     game,
-    report,
+    analysis,
     playerReports: data.playerReports,
     loading:
       details.error === null &&

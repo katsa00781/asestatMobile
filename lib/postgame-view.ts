@@ -64,6 +64,8 @@ const LOW_SAMPLE = 24;
 
 export function buildPostgameView(
   report: PostGameReport,
+  /** A `buildPostgameAutoFocus` listája – a `lib/postgame-data` adja a riporttal együtt. */
+  nextFocus: string[],
   playerReports: Map<string, GameReport>,
 ): PostgameView {
   // Kis szezonmintánál a `@core` a liga mediánt adja a `season` mezőkben (web 8ccdf47).
@@ -116,7 +118,7 @@ export function buildPostgameView(
     ),
     strengths: toEntries(report.strengths),
     problems: toEntries(report.problems),
-    nextFocus: toEntries(report.nextFocus),
+    nextFocus: toEntries(nextFocus),
   };
 }
 
@@ -225,8 +227,10 @@ function buildShotMap(report: PostGameReport): ShotMapView | null {
 
   const { team, season, comparison: delta } = shotMap;
 
+  // Gyűrű + festék + középtáv + hármas = 100%; a sarok hármas a hármas része.
   const rates: StatListItem[] = [
     shotItem('Gyűrű arány', `${formatDecimal(team.rimRate, 1)}%`, delta.rimRateDelta),
+    shotItem('Festék arány', `${formatDecimal(team.paintRate, 1)}%`, delta.paintRateDelta),
     shotItem('Középtáv arány', `${formatDecimal(team.midRate, 1)}%`, delta.midRateDelta),
     shotItem('Hármas arány', `${formatDecimal(team.threeRate, 1)}%`, delta.threeRateDelta),
     shotItem('Sarok hármas arány', `${formatDecimal(team.corner3Rate, 1)}%`, delta.corner3RateDelta),
@@ -265,11 +269,33 @@ function buildShotMap(report: PostGameReport): ShotMapView | null {
       { label: 'Szez. %', width: 52 },
     ],
     zoneRows,
+    coverageNote: coverageNote(shotMap.coverage),
     sampleNote:
       team.attempts < LOW_SAMPLE
         ? `Alacsony mintaszám (${team.attempts} dobás), a zónák trendje óvatosan értelmezendő.`
         : null,
   };
+}
+
+/**
+ * A dobástérkép dobásszáma a box score mezőnykísérleteihez mérve – a webes
+ * figyelmeztető sor szövege (web H17 / H18). Egyezésnél `null`.
+ */
+function coverageNote(coverage: NonNullable<PostGameReport['shotMap']>['coverage']): string | null {
+  if (!coverage || coverage.missing === 0) return null;
+
+  const gap =
+    coverage.missing > 0
+      ? `${coverage.missing} dobás hiányzik a dobástérképről`
+      : `${-coverage.missing} dobással több van a dobástérképen`;
+  const detail = coverage.missingDetail
+    ? ` (a box score szerint: ${plainText(coverage.missingDetail)})`
+    : '';
+
+  return (
+    `${gap}: ${coverage.shotMapAttempts} dobás a box score ${coverage.boxAttempts} ` +
+    `mezőnykísérletével szemben${detail} – a zónaadatok és az FG% ehhez mérten értendők.`
+  );
 }
 
 /**

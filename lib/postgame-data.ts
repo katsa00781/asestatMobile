@@ -19,6 +19,7 @@ import { parseKosarstatPointSources } from '@core/kosarstat-pbp-parse';
 import {
   analyzePostGameReport,
   buildKosarstatPostgameContext,
+  buildPostgameAutoFocus,
   buildTeamBenchmarks,
   mergeKosarstatPostgameContext,
   type KosarstatPointSourceTotals,
@@ -105,7 +106,17 @@ export interface ReportInput {
   clutch: KosarstatGameClutch | null;
 }
 
-export function buildPostgameReport(input: ReportInput): PostGameReport | null {
+export interface PostgameAnalysis {
+  report: PostGameReport;
+  /**
+   * A megjelenített „Következő fókusz” lista. Ugyanaz a `@core` függvény adja,
+   * amelyikből az összefoglaló fókuszblokkja készül (web H17) – a nyers
+   * `report.nextFocus`-ból hiányzik az ellenfél-specifikus és a kosarstat pont.
+   */
+  nextFocus: string[];
+}
+
+export function buildPostgameReport(input: ReportInput): PostgameAnalysis | null {
   const { game, seasonName, teamId, teamName, payload } = input;
   const leagueTeams = input.leagueTeams.map(withOpponentTotals);
 
@@ -169,10 +180,14 @@ export function buildPostgameReport(input: ReportInput): PostGameReport | null {
         // A `@core` rendezi saját / ellenfél oldalra, és csak akkor írja a
         // riportba, ha az események pontösszege egyezik a végeredménnyel.
         pointSources: payload.pointSources,
+        // Ezzel a kontextus saját sorain is lefut az ORB% ↔ második esély
+        // ellentmondás-ellenőrzés (web H17), nem csak az összefűzésben.
+        expectedPoints: { own: game.ourScore, opponent: game.oppScore },
       })
     : buildKosarstatPostgameContext(null);
 
-  return mergeKosarstatPostgameContext(baseReport, kosarstat);
+  const report = mergeKosarstatPostgameContext(baseReport, kosarstat);
+  return { report, nextFocus: buildPostgameAutoFocus(report, kosarstat) };
 }
 
 /**
