@@ -3,9 +3,10 @@
  * (a webprojekt `mobile-sync/2026-09-26-postgame-analysis-spec.md` 3. pontja).
  *
  * Makett nincs hozzá: a jegyzet a specifikáció, és minden szekció meglévő,
- * jóváhagyott komponensből épül – `InsightCard`, `StatTile`, `StackedRow`,
- * `MeterList`, `StatList`, `StatMatrix`, `PointList`, `GlowCard` (D-122),
- * a saját – ellenfél blokkoknál `TeamSplitList` (D-126). Új design token nincs.
+ * jóváhagyott komponensből épül – `StatTile`, `StackedRow`, `MeterList`,
+ * `StatList`, `StatMatrix`, `PointList`, `GlowCard` (D-122), a saját – ellenfél
+ * blokkoknál `TeamSplitList` (D-126). Az összefoglaló szakaszonként
+ * `PostgameSummaryCard` (D-132). Új design token nincs.
  */
 import { StyleSheet, Text, View } from 'react-native';
 import { Crosshair, Target, ThumbsDown, ThumbsUp, TriangleAlert } from 'lucide-react-native';
@@ -13,10 +14,10 @@ import { Crosshair, Target, ThumbsDown, ThumbsUp, TriangleAlert } from 'lucide-r
 import { Badge } from '@/components/Badge';
 import { DecisiveFactorList } from '@/components/DecisiveFactorList';
 import { GlowCard } from '@/components/GlowCard';
-import { InsightCard } from '@/components/InsightCard';
 import { MeterList } from '@/components/MeterList';
 import { PointList } from '@/components/PointList';
 import { PostgamePlayerCard } from '@/components/PostgamePlayerCard';
+import { PostgameSummaryCard } from '@/components/PostgameSummaryCard';
 import { SectionLabel } from '@/components/SectionLabel';
 import { StackedRow, StackedRowHeader } from '@/components/StackedRow';
 import { StatList } from '@/components/StatList';
@@ -33,7 +34,9 @@ const KEY_STAT_WIDTH = 52;
 export function PostgamePanel({ view }: { view: PostgameView }) {
   return (
     <>
-      <InsightCard label="Összegzés" fragments={[{ text: view.summary }]} style={styles.block} />
+      {view.summary.map((section) => (
+        <PostgameSummaryCard key={section.title} section={section} style={styles.block} />
+      ))}
       {view.notes ? (
         <Text className="font-body text-sm text-secondary" style={styles.note}>
           {view.notes}

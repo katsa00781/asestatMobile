@@ -9,7 +9,7 @@
  * Minden `@core` szöveg a `plainText`-en megy át: a `postgame-report` `→` és
  * `≈` jelet is ír, ami a csomagolt betűkészletekből hiányzik (D-064).
  */
-import type { PostGameReport } from '@core/postgame-report';
+import { parsePostgameSummary, type PostGameReport } from '@core/postgame-report';
 import type { PlayerPostGameBreakdown } from '@core/player-postgame';
 
 import type { MatrixRow } from '@/components/StatMatrix';
@@ -26,6 +26,7 @@ import type {
   PostgamePlayerView,
   PostgameView,
   ShotMapView,
+  SummarySection,
 } from '@/types/postgame';
 import type { PointEntry } from '@/types/scouting';
 import type { SplitMetric } from '@/types/situational';
@@ -59,6 +60,12 @@ const ZONES = [
   { key: 'aboveBreak3', label: 'Íven kívüli hármas' },
 ] as const;
 
+/**
+ * A webes `PostgameSummary` `splitLabel` szabálya: a pont eleje címke, ha
+ * 60 karakternél rövidebb, és nincs benne pontosvessző.
+ */
+const SUMMARY_LABEL = /^([^:;]{2,60}): (.+)$/;
+
 /** A web ennyi dobás alatt figyelmeztet a zónatrendek bizonytalanságára. */
 const LOW_SAMPLE = 24;
 
@@ -74,7 +81,7 @@ export function buildPostgameView(
   const comparable = report.baseline?.comparable ?? true;
 
   return {
-    summary: plainText(report.summary),
+    summary: buildSummary(report),
     notes: report.dataNotes.length > 0 ? report.dataNotes.map(plainText).join(' ') : null,
     kpis: buildKpis(report),
     baseline: buildBaseline(report),
@@ -122,6 +129,23 @@ export function buildPostgameView(
   };
 }
 
+/**
+ * Az összefoglaló szakaszokra bontva (web H18). A `@core` szövege soronként
+ * tagolt: a `**Cím**` sor szakaszt nyit, a többi sor a szakasz egy pontja.
+ * Tagolatlan szövegre egyetlen, cím nélküli szakasz jön vissza.
+ */
+function buildSummary(report: PostGameReport): SummarySection[] {
+  return parsePostgameSummary(report.summary).map((section) => ({
+    title: plainText(section.title),
+    focus: section.key === 'focus',
+    items: section.items.map((item) => {
+      const text = plainText(item);
+      const match = SUMMARY_LABEL.exec(text);
+      return match ? { label: match[1], text: match[2] } : { label: null, text };
+    }),
+  }));
+}
+
 function buildBaseline(report: PostGameReport): BaselineView {
   const baseline = report.baseline;
   const league = baseline?.kind === 'league';
@@ -155,28 +179,52 @@ function buildKpis(report: PostGameReport): PostgameView['kpis'] {
   };
 }
 
-/** Egy saját – ellenfél sor nyersen; mindegyiknél a nagyobb érték a jobb. */
+/** Egy saját – ellenfél sor nyersen. */
 interface SplitSpec {
   label: string;
   own: number;
   opponent: number;
   /** Százalék (egy tizedes) – egyébként darabszám. */
   percent?: boolean;
+  /** A kisebb érték a jobb (eladott labda) – a kiemelés megfordul. */
+  lowerIsBetter?: boolean;
 }
 
-/** A webes „Box score alapmutatók” tábla (FG%, FT%, lepattanók). */
+/**
+ * A webes „Box score alapmutatók” tábla: dobószázalékok, lepattanók és a
+ * számláló statisztikák. A 2P / 3P bontás és az assziszt – blokk sorok mezői
+ * opcionálisak a `@core`-ban (web H18), ezért csak páros megléténél jelennek meg.
+ */
 function buildBoxScore(report: PostGameReport): SplitMetric[] | null {
   const box = report.metrics.boxScore;
   if (!box?.opponent) return null;
   const { own, opponent } = box;
 
-  return [
+  const specs: SplitSpec[] = [
     { label: 'Mezőny %', own: own.fgPct, opponent: opponent.fgPct, percent: true },
+    ...pair('Kettes %', own.twoPct, opponent.twoPct, { percent: true }),
+    ...pair('Hármas %', own.threePct, opponent.threePct, { percent: true }),
     { label: 'Büntető %', own: own.ftPct, opponent: opponent.ftPct, percent: true },
     { label: 'Lepattanó', own: own.reb, opponent: opponent.reb },
     { label: 'Támadó lepattanó', own: own.oreb, opponent: opponent.oreb },
     { label: 'Védő lepattanó', own: own.dreb, opponent: opponent.dreb },
-  ].map(toSplitMetric);
+    ...pair('Assziszt', own.ast, opponent.ast),
+    ...pair('Eladott labda', own.tov, opponent.tov, { lowerIsBetter: true }),
+    ...pair('Szerzett labda', own.stl, opponent.stl),
+    ...pair('Blokk', own.blk, opponent.blk),
+  ];
+
+  return specs.map(toSplitMetric);
+}
+
+/** Opcionális mezőpárból sor – ha bármelyik oldal hiányzik, a sor kimarad. */
+function pair(
+  label: string,
+  own: number | undefined,
+  opponent: number | undefined,
+  options: Pick<SplitSpec, 'percent' | 'lowerIsBetter'> = {},
+): SplitSpec[] {
+  return own === undefined || opponent === undefined ? [] : [{ label, own, opponent, ...options }];
 }
 
 /**
@@ -203,6 +251,7 @@ function buildPointSources(report: PostGameReport): SplitMetric[] | null {
 function toSplitMetric(spec: SplitSpec): SplitMetric {
   const format = (value: number) => (spec.percent ? formatDecimal(value, 1) : String(value));
   const scale = Math.max(spec.own, spec.opponent);
+  const ownBetter = spec.lowerIsBetter ? spec.own < spec.opponent : spec.own > spec.opponent;
 
   return {
     label: spec.label,
@@ -210,7 +259,7 @@ function toSplitMetric(spec: SplitSpec): SplitMetric {
     awayText: format(spec.opponent),
     homeShare: scale > 0 ? spec.own / scale : 0,
     awayShare: scale > 0 ? spec.opponent / scale : 0,
-    better: spec.own === spec.opponent ? null : spec.own > spec.opponent ? 'home' : 'away',
+    better: spec.own === spec.opponent ? null : ownBetter ? 'home' : 'away',
   };
 }
 
@@ -239,7 +288,8 @@ function buildShotMap(report: PostGameReport): ShotMapView | null {
   const efficiency: StatListItem[] = [
     shotItem('Gyűrű FG%', `${formatDecimal(team.rimPct, 1)}%`, delta.rimPctDelta),
     shotItem('Hármas FG%', `${formatDecimal(team.threePct, 1)}%`, delta.threePctDelta),
-    shotItem('Dobásminőség-index', team.shotQualityIndex.toFixed(2), delta.shotQualityDelta),
+    // A mutató a dobások helyét méri, a találatot nem – ezért nem „dobásminőség” (web H18).
+    shotItem('Dobáshely-mix index', team.shotQualityIndex.toFixed(2), delta.shotQualityDelta),
   ];
 
   const zoneRows: MatrixRow[] = ZONES.map(({ key, label }) => {

@@ -26,6 +26,21 @@ export interface PostgameKpis {
   efgText: string;
 }
 
+/** Az összefoglaló egy pontja; a „Címke: szöveg” alakú sor címkéje külön jön. */
+export interface SummaryItem {
+  label: string | null;
+  text: string;
+}
+
+/** Az összefoglaló egy szakasza (pl. „Játékos kiemelések”). */
+export interface SummarySection {
+  /** Üres, ha a `@core` szövege tagolatlan. */
+  title: string;
+  /** A „Következő fókusz” szakasz kiemelve jelenik meg. */
+  focus: boolean;
+  items: SummaryItem[];
+}
+
 /** Egy kulcsmutató sora: meccs / referencia / különbség (referencia nélkül „–”), alcímben a ligamedián. */
 export interface KeyStatRow {
   key: string;
@@ -91,7 +106,8 @@ export interface BaselineView {
 }
 
 export interface PostgameView {
-  summary: string;
+  /** Az összefoglaló szakaszonként – a `@core` `parsePostgameSummary` bontása. */
+  summary: SummarySection[];
   /** A `dataNotes` egy bekezdésben, vagy `null`. */
   notes: string | null;
   kpis: PostgameKpis;

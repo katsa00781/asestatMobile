@@ -199,6 +199,15 @@ előkészítve."), nem általános hálózati hibaként.
       szinkron, közös „Következő fókusz” lista (`buildPostgameAutoFocus`),
       `expectedPoints` bemenet, festék-arány sor és dobástérkép-lefedettség
       (D-130, D-131)
+- [x] Post-game H18 (web `ff80b8f`, `28dd2f2`, `a4e29ae`, `be52d90`; jegyzet:
+      `docs/mobile-sync/2026-10-11-postgame-riport-h18.md`): szakaszolt
+      összefoglaló (`parsePostgameSummary`), box score 2P / 3P és számláló
+      sorok, „Dobáshely-mix index” felirat; a többi pont a szinkronnal magától
+      érvényesül (D-132, D-133, D-134)
+- [ ] Eszközös próba (iOS + Android) a 2026-10-11-i átvezetésre (H17 + H18),
+      az ASE–Sopron meccsen: a négy összefoglaló-kártya tördelése, a
+      „Rotációs hozzájárulás (rövid percben)” jelvény, a 11 soros box score,
+      a dobástérkép lefedettség-sora és a ~75 karakteres „Védekezés: …” sorok
 - [ ] Eszközös próba (iOS + Android) a 2026-10-04-i átvezetésre: post-game egy
       Kosarstat-linkelt 2026/27-es meccsen (Pontforrások, Box score
       alapmutatók, 3 soros ellenfélprofil), a 2025/2026-os meccslista (39 meccs,
@@ -258,6 +267,71 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-10-11 – Post-game H18: szakaszolt összefoglaló, box score bővítés (web → mobil)
+
+**Mit:** A `docs/mobile-sync/2026-10-11-postgame-riport-h18.md` teendői. A
+`@core` szinkron a H17-tel közös (`d07617f`).
+- **Összefoglaló szakaszonként** (14. pont): a `lib/postgame-view.ts`
+  `buildSummary`-ja a `@core` `parsePostgameSummary`-jével bontja a szöveget,
+  a „Címke: szöveg” alakú pontok címkéjét a web szabályával választja le. Az
+  eddigi egyetlen `InsightCard` helyett szakaszonként egy
+  `PostgameSummaryCard` áll; a „Következő fókusz” szakasz narancs kiemelést
+  kap (D-132).
+- **Box score** (12. pont): a meglévő öt sor mellé Kettes %, Hármas %,
+  Assziszt, Eladott labda, Szerzett labda, Blokk. Az opcionális mezők
+  hiányában a sor kimarad. Az eladott labdánál a kisebb érték kap kiemelést
+  (D-133).
+- **Felirat** (13. pont): „Dobásminőség-index” helyett „Dobáshely-mix index”.
+- **Kódváltozás nélkül, a szinkronnal érvényesül:**
+  - az összefoglaló a kész riportobjektumból épül, a megjegyzés-sor kikerült
+    belőle (1–2. pont). A mobil nem vág ki szöveget a `summary`-ből, a
+    megjegyzések eddig is a `dataNotes`-ból jöttek;
+  - ellenfél-profil számokkal (3.), pontforrás-alapú döntő tényezők (5.),
+    védőlepattanó-diagnózis (6.), „liga felett / alatt” sorok számokkal (7.),
+    összevont erősségek (8.), védekezési verdikt (9.), `Védekezés:` előtagú
+    sorok (10.);
+  - a mobil sehol nem szűr sorra előtag vagy pontos egyezés alapján, a
+    `defenseEfficiencyDelta`-t nem mutatja jelzőként, és a „Hatékony
+    szerepjátékos” címkét nem kezeli rangként (4., 6., 7., 9. pont);
+  - a hiányzó dobás típusa (11. pont) a H17-es lefedettség-sorban már benne
+    van.
+- **Nem készült** (D-134): a `context.defense` értékpárjai külön kártyán, a
+  dobáshely-mix index lábjegyzete, a lineup-probléma.
+
+**Fájlok:** `components/PostgameSummaryCard.tsx` (új),
+`components/PostgamePanel.tsx`, `lib/postgame-view.ts`, `types/postgame.ts`,
+`docs/feature-tasks.md`
+**Tesztelve:**
+- `npx tsc --noEmit`, `npm run lint` hibátlan. `npx expo export --platform ios
+  --platform android` lefut, mindkét Hermes bundle elkészül.
+- Scratchpad-harness (jiti + aliasok, anon kliens, csak olvasás), élő adaton:
+  - **ASE–Sopron** (2026-10-10): négy szakasz (7 / 3 / 5 / 3 pont), a
+    fókusz-szakasz pontjai egyeznek a fókusz-kártyával. A Kontroll csoport
+    élén „Labdaeladásból szerzett pont: 32–16 (+16)”, a Hatékonyság élén
+    „Gyors befejezésből szerzett pont (≤ 6 mp): 19–4 (+15)” (5. pont). Box
+    score a jegyzet ellenőrző számaival: 2P 67.6 – 51.5, 3P 46.7 – 39.1,
+    assziszt 21 – 14, eladott labda 10 – 19 (a saját oldal kiemelve),
+    szerzett labda 12 – 6, blokk 2 – 0. Young „Hatékony szerepjátékos”, a
+    „Limitált hatás” listán nem szerepel.
+  - További 10 meccs két szezonból: mindenhol négy szakasz és 11 box score
+    sor.
+  - Módosított riporttal: opcionális box score mezők nélkül az öt régi sor
+    marad; tagolatlan szövegre egy cím nélküli szakasz, üres szövegre nincs
+    kártya; többlet dobásnál „2 dobással több van a dobástérképen …”.
+- A leghosszabb jelvény („Rotációs hozzájárulás (rövid percben)”) a
+  csomagolt Barlow Condensed SemiBold szélességeiből számolva ~235 pt, a
+  kártya belső szélessége 390 pt-os kijelzőn 330 pt. A usage-jelvény mellé
+  nem mindig fér, olyankor a sor tördel (`flexWrap`).
+- Eszközön és szimulátoron nem néztem meg.
+
+**Nyitva maradt:**
+- Eszközös próba (iOS + Android), lásd a „Web → mobil szinkron” új sorát.
+- Az összefoglaló „Következő fókusz” szakasza és a képernyő alján a
+  „Következő fókusz” kártya ugyanazt a három pontot mutatja, ahogy a weben. Ha
+  mobilon sok, az egyik elhagyható.
+
+**Commit:** `feat: post-game H18 átvezetése – szakaszolt összefoglaló, box score bővítés`
 
 ## 2026-10-11 – Post-game H17: közös fókuszlista, festék-szabály, dobástérkép-lefedettség (web → mobil)
 
@@ -5747,3 +5821,66 @@ egy-két hiányzó dobás nem hiba, a sárga túl erős jelzés (D-126 2. pontja
 (c) csak az adatmegjegyzés: a dobástérképnél nem látszik.
 **Visszavonható?** Igen: `lib/postgame-view.ts` `buildShotMap` /
 `coverageNote` és a `ShotMapSection` egy sora.
+
+## D-132 – A post-game összefoglaló szakaszonként külön kártya (`PostgameSummaryCard`)
+**Dátum:** 2026-10-11
+**Döntés:** Az összefoglaló az eddigi egyetlen `InsightCard` helyett
+szakaszonként egy kártyán jelenik meg („Mérkőzés összefoglalója”, „Játékos
+kiemelések”, „Ellenfél profil”, „Következő fókusz”). A kártya a `PointList`
+tipográfiáját követi, a sorok előtt 6 pt-os cián pont áll. A „Címke: szöveg”
+alakú pont címkéje DM Sans Medium, `text.secondary` – a web `splitLabel`
+szabályával (60 karakternél rövidebb, pontosvessző nélküli előtag). A fókusz
+szakasz narancs sávot, címet és pontokat kap. A `reflection` szakaszt nem
+szűrjük ki: a mobil nem mutatja külön, és a pre-game visszacsatolás a v1-ben
+nincs bekötve, így most nem is jön.
+**Miért:** A `@core` szövege H18 óta `**Cím**` és „•” sorokból áll, 18 ponttal.
+Egy szövegblokkban ez mobilon olvashatatlan. A web ugyanezt a bontást
+mutatja, a fókuszt narancs kerettel. Makett nincs hozzá, a jegyzet a
+specifikáció (D-122 mintája); új design token nincs.
+**Alternatíva:** (a) egy `InsightCard`, benne alcímekkel: a kártya közel egy
+képernyőnyi lenne, a fókusz nem emelhető ki; (b) szakaszonként `PointList`
+ikonnal: az ikon hangnemet jelez, a szakaszok pedig nem azok, és a címke nem
+emelhető ki a `PointEntry`-ben; (c) a fókusz szakasz elhagyása, mert a
+képernyő alján van fókusz-kártya: eltérne a webtől, és az összefoglaló épp a
+teendőt veszítené el.
+**Visszavonható?** Igen: `lib/postgame-view.ts` `buildSummary`, a
+`PostgamePanel` első blokkja és a komponens.
+
+## D-133 – Post-game box score: 11 sor a mobil szóhasználatával, az eladott labdánál fordított kiemelés
+**Dátum:** 2026-10-11
+**Döntés:** A box score blokk új sorai: Kettes %, Hármas %, Assziszt, Eladott
+labda, Szerzett labda, Blokk. A feliratok az élő meccsstatisztika és a
+kulcsmutatók szavai (D-084), nem a jegyzet „Tripla % / Gólpassz /
+Labdavesztés” alakjai. Az eladott labdánál a kisebb érték oldala kap
+kiemelést (`lowerIsBetter`), a sávok hossza továbbra is az értéket követi. A
+jegyzet a hármas százalékot kérte, a kettes ugyanabból a bontásból jön.
+**Miért:** Ugyanaz a mutató két képernyőn nem viselhet két nevet. Az élő
+nézet (`lib/live-view.ts`) az eladott labdát eddig is fordított kiemeléssel
+mutatja, a `SplitMetricRow` ezt tudja.
+**Alternatíva:** (a) a jegyzet javaslata, semleges szín a labdavesztésnél: a
+sor elveszítené a kiemelést, miközben az élő nézetben megvan; (b) a jegyzet
+feliratai: eltérnének a mobil többi képernyőjétől; (c) dobott / kísérlet
+párok: a 88 pt-os értékdobozba nem férnek (D-126).
+**Visszavonható?** Igen: `lib/postgame-view.ts` `buildBoxScore`.
+
+## D-134 – H18: védekezés-kártya, index-lábjegyzet és lineup-probléma nem készül a mobilban
+**Dátum:** 2026-10-11
+**Döntés:**
+1. A `context.defense` három értékpárja (ellenfél eFG, kikényszerített TO
+   rate, DRtg a liga mediánhoz mérve) nem kap külön kártyát.
+2. A „Dobáshely-mix index” sor mellé nem kerül magyarázó lábjegyzet.
+3. A web lineup-problémája (`extraProblems`, „Együttállás: …”) a mobilban nem
+   jelenik meg.
+
+**Miért:** (1) A három értékpár az összefoglaló „Hatékonyság” pontjában
+számokkal szerepel, a mobilban pedig nincs védekezés-kártya, amit bővíteni
+lehetne – új szekció lenne makett nélkül. (2) Az új név már azt mondja, amit a
+mutató mér; a `StatList` sora egysoros, lábjegyzethez új elem kellene. (3) A
+számítás a webes `lib/postgame-lineup-export.ts`-ben él, nem `@core`, és a
+mobil nem olvas Kosarstat lineup táblát (a jegyzet szerint is tudatos eltérés).
+**Alternatíva:** (1) `TeamSplitList` saját – liga párokkal: a komponens saját –
+ellenfél összevetésre való, a liga medián nem ellenfél; (2) szöveges sor a
+dobástérkép alatt, a `sampleNote` mintájára.
+**Ha újranyílik:** a lineup-elemzés előbb kerüljön `@core` modulba.
+**Visszavonható?** Igen, a döntés nem zár ki semmit: a mezők a szinkronnal a
+`core/`-ban vannak.
