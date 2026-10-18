@@ -206,6 +206,28 @@ export type PostgameOpponentShooting = {
   turnoverRate: number;
 };
 
+/**
+ * „Mi döntötte el?” – a pontkülönbség pontos felbontása. Befejezés = pontot
+ * hozó kísérlet (FGA + 0,44·FTA), pont / befejezés = a hatékonyság.
+ * volumen = (saját − ellenfél befejezés) × ellenfél pont/befejezés,
+ * hatékonyság = saját befejezés × (saját − ellenfél pont/befejezés);
+ * a kettő összege a pontkülönbség. A volumen-különbség forrása a
+ * támadólepattanó és a labdavesztés (mindkettő a befejezések számát mozgatja).
+ */
+export type PostgameMarginBreakdown = {
+  ownChances: number;
+  opponentChances: number;
+  ownPointsPerChance: number;
+  opponentPointsPerChance: number;
+  volume: number;
+  efficiency: number;
+  /** OREB%, %. */
+  ownOrebRate: number;
+  opponentOrebRate: number;
+  ownTurnovers: number;
+  opponentTurnovers: number;
+};
+
 export type PostGameReport = {
   teamId: string;
   teamName: string;
@@ -229,6 +251,8 @@ export type PostGameReport = {
     boxScore?: { own: PostgameBoxScoreLine; opponent: PostgameBoxScoreLine | null };
     /** Kosarstat eseménylistából számolt pontforrások; a kosarstat-kiegészítés tölti ki. */
     pointSources?: PostgamePointSources | null;
+    /** A pontkülönbség volumen- és hatékonyság-bontása; régi riportobjektumban hiányzik. */
+    marginBreakdown?: PostgameMarginBreakdown | null;
   };
   charts: {
     efficiency: PostGameChartDatum[];
@@ -247,11 +271,13 @@ export type PostGameReport = {
     offenseEfficiencyDelta: 'Higher' | 'Lower' | 'Similar';
     defenseEfficiencyDelta: 'Higher' | 'Lower' | 'Similar';
     /**
-     * A védekezés viszonyítása a liga mediánhoz: az ellenfél meccs-eFG%-a, a
-     * kikényszerített labdavesztés (az ellenfél TO rate-je, %) és a DRtg. A
-     * `defenseEfficiencyDelta` a DRtg-re épül, ha van liga-referenciája;
-     * különben az eFG és a TO együttesére. `null`, ha nincs ellenfél-adat vagy
-     * liga benchmark. A TO / DRtg mezők régi riportobjektumban hiányoznak.
+     * A védekezés viszonyítása a liga mediánhoz: a DRtg és a négy faktor – az
+     * ellenfél meccs-eFG%-a, a kikényszerített labdavesztés (az ellenfél TO
+     * rate-je), az ellenfél OREB%-a (védőlepattanózás) és FTM rate-je
+     * (faultfegyelem), mind %. A `defenseEfficiencyDelta` a DRtg-re épül, ha van
+     * liga-referenciája; különben a négy faktor szavaz. `null`, ha nincs
+     * ellenfél-adat vagy liga benchmark. A TO / DRtg / OREB / FT mezők régi
+     * riportobjektumban hiányoznak.
      */
     defense?: {
       opponentEfg: number;
@@ -260,6 +286,10 @@ export type PostGameReport = {
       leagueTurnoverRate?: number | null;
       drtg?: number | null;
       leagueDrtg?: number | null;
+      opponentOrebRate?: number;
+      leagueOrebRate?: number | null;
+      opponentFtRate?: number;
+      leagueFtRate?: number | null;
     } | null;
   };
   dataNotes: string[];
@@ -285,6 +315,15 @@ export type PostGameReport = {
   reflection: {
     xFactor: string;
     risk: string;
+  };
+  /**
+   * A Kosarstat lineupból számolt összefoglaló sorok (csak a webes
+   * összefűzés tölti ki): „kezdő ötös vs többi perc” és az on/off
+   * ellentmondások a pozitív címkéjű játékosoknál.
+   */
+  lineupSummary?: {
+    starterSplit: string | null;
+    onOffWarnings: string[];
   };
   lineupInsights?: {
     available: boolean;
@@ -375,6 +414,14 @@ export type PostgameShotMapCoverage = {
    * különbség tiszta hiány, nem zóna-besorolási eltérés.
    */
   missingDetail?: string;
+  /**
+   * Legalább ennyi hárompontos kísérlet kétpontosként (feltehetően
+   * középtávként) került a dobástérképre: a térkép 3P-kísérlete kevesebb, a
+   * 2P-kísérlete több, mint a box score-é. Régi riportobjektumban hiányzik.
+   */
+  misclassifiedThrees?: number;
+  /** Ebből értékesített hárompontos (becslés). */
+  misclassifiedThreesMade?: number;
 };
 
 type ShotZone = 'rim' | 'paint' | 'mid' | 'corner3' | 'aboveBreak3';
@@ -416,6 +463,11 @@ type ShotMapComparison = {
   rimPctDelta: number;
   threePctDelta: number;
   shotQualityDelta: number;
+  /** A meccs gyűrű-zónája és a szezon gyűrű FG%-a; régi riportobjektumban hiányzik. */
+  rimMade?: number;
+  rimAttempts?: number;
+  rimPct?: number;
+  seasonRimPct?: number;
 };
 
 type FactorType = 'Hatékonyság' | 'Volumen' | 'Kontroll';
@@ -464,10 +516,22 @@ const quantile = (sorted: number[], percentile: number) => {
   return sorted[base];
 };
 
-const normalizeOffenseX = (event: ShotMapEventInput) =>
+const normalizeOffenseX = (event: Pick<ShotMapEventInput, 'x' | 'shotSide'>) =>
   event.shotSide === 'away' ? 100 - event.x : event.x;
 
-const classifyShotZone = (event: ShotMapEventInput): ShotZone => {
+/**
+ * Saroktripla: az alapvonal közelében (x ≤ 14) és az oldalvonalak mellett
+ * (y ≤ 14 vagy y ≥ 86). A koordináták normalizálás után a bal palánk felé
+ * támadnak, a kosár az (x ≈ 6, y = 50) pontban van, az x a teljes pályahossz
+ * (100 egység ≈ 28 m): az egyenes sarokszakasz (~3 m) x ≈ 11-ig tart. (A
+ * korábbi `x >= 25` feltétel fordított volt: a szárny-triplákat számolta
+ * saroknak, a valódi saroktriplákat „nem sarok” triplának.)
+ */
+const CORNER3_MAX_X = 14;
+const CORNER3_SIDE_BAND = 14;
+
+/** Dobászóna a dobás helyéből – a webes szezon-nézetek is ezt használják. */
+export const classifyShotZone = (event: Pick<ShotMapEventInput, 'x' | 'y' | 'shotSide'>): ShotZone => {
   const x = normalizeOffenseX(event);
   const y = event.y;
   const dx = x - 6;
@@ -477,7 +541,7 @@ const classifyShotZone = (event: ShotMapEventInput): ShotZone => {
   if (distance <= 9) return 'rim';
   if (distance <= 18) return 'paint';
 
-  const corner3 = x >= 25 && (y <= 14 || y >= 86);
+  const corner3 = x <= CORNER3_MAX_X && (y <= CORNER3_SIDE_BAND || y >= 100 - CORNER3_SIDE_BAND);
   if (corner3) return 'corner3';
 
   if (distance >= 29) return 'aboveBreak3';
@@ -567,9 +631,31 @@ const buildShotMapComparison = (
   rimPctDelta: round(game.rimPct - season.rimPct, 1),
   threePctDelta: round(game.threePct - season.threePct, 1),
   shotQualityDelta: round(game.shotQualityIndex - season.shotQualityIndex, 1),
+  rimMade: game.zones.rim.made,
+  rimAttempts: game.zones.rim.attempts,
+  rimPct: game.rimPct,
+  seasonRimPct: season.rimPct,
 });
 
-const buildPlayerShotMapContext = (events: ShotMapEventInput[]): PlayerShotMapContext => {
+/**
+ * A dobástérkép zóna-deltái a középtáv / tripla nélkül: félrebesorolt hármasoknál
+ * ezek (és a belőlük számolt dobáshely-mix index) torzak, a gyűrű és a festék nem.
+ */
+const withoutPerimeterZones = (comparison: ShotMapComparison): ShotMapComparison => ({
+  ...comparison,
+  midRateDelta: 0,
+  threeRateDelta: 0,
+  corner3RateDelta: 0,
+  threePctDelta: 0,
+  shotQualityDelta: 0,
+});
+
+/**
+ * Játékosonkénti dobástérkép-összesítő. `zonesDistorted`: félrebesorolt
+ * hármasoknál a középtáv- és tripla-számok kimaradnak, így a játékos-szintű
+ * középtáv / periméter szabályok sem ítélnek belőlük.
+ */
+const buildPlayerShotMapContext = (events: ShotMapEventInput[], zonesDistorted = false): PlayerShotMapContext => {
   const map: PlayerShotMapContext = {};
 
   events.forEach(event => {
@@ -613,6 +699,17 @@ const buildPlayerShotMapContext = (events: ShotMapEventInput[]): PlayerShotMapCo
       if (event.isSuccessful) row.corner3Made += 1;
     }
   });
+
+  if (zonesDistorted) {
+    Object.values(map).forEach(row => {
+      row.midAttempts = 0;
+      row.midMade = 0;
+      row.threeAttempts = 0;
+      row.threeMade = 0;
+      row.corner3Attempts = 0;
+      row.corner3Made = 0;
+    });
+  }
 
   return map;
 };
@@ -1371,10 +1468,17 @@ const formatPositiveContributorLabel = (player: PlayerGameStat) => {
   return player.name;
 };
 
+/** Ennyi perc alatt egy meccs nem ad megbízható mintát a játékos minősítéséhez. */
+const PLAYER_RELIABLE_SAMPLE_MINUTES = 8;
+
+/** „Kiugró teljesítmény”: legalább ennyi perc és ekkora Impact score (vagy `mvp` osztály). */
+const OVERPERFORMER_MIN_MINUTES = 12;
+const OVERPERFORMER_MIN_IMPACT = 60;
+const OVERPERFORMER_LIMIT = 4;
+
 const analyzePlayerImpact = (players: PlayerGameStat[]) => {
   const positive: string[] = [];
   const negative: string[] = [];
-  const overperformers: Array<{ name: string; score: number }> = [];
   const underperformers: Array<{ name: string; score: number }> = [];
 
   // Standard, perc-normalizált USG% (0–1), ugyanaz, mint a játékosbontásban.
@@ -1384,28 +1488,12 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
     const usageShare = usageRates.get(player.playerId) ?? 0;
     const ts = computePlayerTrueShooting(player);
     const valPer36 = player.minutes > 0 ? (player.val / player.minutes) * 36 : 0;
-    const hasReliableSample = player.minutes >= 8;
+    const hasReliableSample = player.minutes >= PLAYER_RELIABLE_SAMPLE_MINUTES;
 
-    if (usageShare >= USG_HIGH_MIN && player.val <= 5) negative.push(player.name);
+    // Pár perces mintánál (pl. 3 perc, 1 dobás) a USG% nem ítélet.
+    if (hasReliableSample && usageShare >= USG_HIGH_MIN && player.val <= 5) negative.push(player.name);
     if (hasReliableSample && usageShare <= USG_LOW_MAX && (player.val >= 10 || (player.minutes >= 12 && valPer36 >= 18))) {
       positive.push(formatPositiveContributorLabel(player));
-    }
-
-    // Also include high-efficiency starters who played fewer minutes (e.g. foul trouble,
-    // tactical substitution) but dominated their time (valPer36 ≥ 35, ts ≥ 0.65).
-    const qualifiesOverperformer =
-      (player.minutes >= 18 || (player.minutes >= 12 && valPer36 >= 35 && ts >= 0.65))
-      && (player.val >= 18 || valPer36 >= 20)
-      && (ts >= 0.55 || usageShare >= 0.2);
-
-    if (qualifiesOverperformer) {
-      const score =
-        player.val * 0.45
-        + valPer36 * 0.2
-        + player.points * 0.2
-        + ts * 100 * 0.1
-        + usageShare * 100 * 0.05;
-      overperformers.push({ name: player.name, score });
     }
 
     const qualifiesUnderperformer =
@@ -1422,10 +1510,6 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
   return {
     positive: positive.slice(0, 3),
     negative: negative.slice(0, 3),
-    overperformers: overperformers
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 4)
-      .map(entry => entry.name),
     underperformers: underperformers
       .sort((a, b) => b.score - a.score)
       .slice(0, 3)
@@ -1434,13 +1518,29 @@ const analyzePlayerImpact = (players: PlayerGameStat[]) => {
 };
 
 /**
+ * „Kiugró teljesítmény” a játékostábla Impact score-jából: legalább 12 perc, és
+ * `mvp` osztály vagy legalább 60-as Impact score, a score sorrendjében. Így a
+ * lista nem mondhat ellent a táblának (korábban egy külön VAL-alapú pontszám a
+ * meccs legjobbját – 17 perc, Impact 71,1 – kihagyta, egy 47,1-es játékost
+ * viszont felvett).
+ */
+const selectOverperformers = (playerReport: PlayerPostGameReport) =>
+  [...playerReport.players]
+    .filter(player =>
+      player.minutes >= OVERPERFORMER_MIN_MINUTES &&
+      (player.impactClass === 'mvp' || player.impactScore >= OVERPERFORMER_MIN_IMPACT))
+    .sort((a, b) => b.impactScore - a.impactScore)
+    .slice(0, OVERPERFORMER_LIMIT)
+    .map(player => player.name);
+
+/**
  * A meccsszintű kiemelések és a játékostábla címkéi két külön szabályból
- * jönnek; itt egyeztetjük őket, hogy ne mondjanak ellent: „Limitált hatás”
- * osztályú játékos nem lehet „Kiugró teljesítmény”, és vezető / alappillér
- * osztályú nem kerülhet a gyenge vagy limitált listára.
+ * jönnek; itt egyeztetjük őket, hogy ne mondjanak ellent: a „Kiugró
+ * teljesítmény” az Impact score-ból jön, és vezető / alappillér osztályú
+ * játékos nem kerülhet a gyenge vagy limitált listára.
  */
 const reconcilePlayerImpact = (
-  impact: PostGameReport['playerImpact'],
+  impact: Omit<PostGameReport['playerImpact'], 'overperformers'>,
   playerReport: PlayerPostGameReport
 ): PostGameReport['playerImpact'] => {
   // A „pozitív” lista eleme zárójeles kiegészítést is kaphat a név után.
@@ -1452,7 +1552,7 @@ const reconcilePlayerImpact = (
   };
   return {
     positive: impact.positive,
-    overperformers: impact.overperformers.filter(entry => classOf(entry) !== 'struggling'),
+    overperformers: selectOverperformers(playerReport),
     negative: impact.negative.filter(entry => !isLeading(entry)),
     underperformers: impact.underperformers.filter(entry => !isLeading(entry)),
   };
@@ -1509,6 +1609,59 @@ const describeInteriorShift = (
       : null;
   }
   return twoRateDelta >= INTERIOR_SHIFT_PP ? `2P-kísérletek aránya nőtt (+${twoRateDelta} százalékpont)` : null;
+};
+
+/** Gyűrű körüli befejezés: ekkora FG%-elmaradás a szezontól, legalább ennyi kísérletnél. */
+const RIM_FINISH_GAP_PP = 10;
+const RIM_FINISH_MIN_ATTEMPTS = 10;
+/** A gyűrű-befejezés célja egy meccsről legfeljebb ennyit léphet (pp). */
+const RIM_GOAL_MAX_STEP_PP = 12;
+const RIM_FINISH_PREFIX = 'Gyűrű körüli befejezés gyenge';
+
+/**
+ * A gyűrű-zóna FG%-a a szezon alatt – a dobásvolumentől függetlenül (a
+ * „gyengült gyűrűtámadás” sor csak akkor jelzett, ha az arány is esett).
+ */
+const describeRimFinishing = (comparison: ShotMapComparison | null | undefined) => {
+  if (!comparison) return null;
+  const { rimMade, rimAttempts, rimPct, seasonRimPct, rimPctDelta } = comparison;
+  if (rimMade === undefined || rimAttempts === undefined || rimPct === undefined || seasonRimPct === undefined) return null;
+  if (rimAttempts < RIM_FINISH_MIN_ATTEMPTS || rimPctDelta > -RIM_FINISH_GAP_PP) return null;
+  return `${RIM_FINISH_PREFIX} (${rimMade}/${rimAttempts}, ${fixed1(rimPct)}% vs szezon ${fixed1(seasonRimPct)}%, ${signedPp(rimPctDelta)})`;
+};
+
+/**
+ * Ennyivel a liga medián feletti 3P-kísérletaránynál az alacsony FTM rate a
+ * dobásmix következménye (a tripla ritkán hoz faultot), nem probléma – kivéve,
+ * ha a gyűrű-zóna aránya is legalább `STRUCTURAL_FT_RIM_RATE_PP`-vel a szezon
+ * felett van: sok gyűrűtámadás mellett a kevés büntető valódi gond.
+ */
+const STRUCTURAL_THREE_RATE_PP = 5;
+const STRUCTURAL_FT_RIM_RATE_PP = 5;
+
+const isStructurallyLowFt = (
+  game: NormalizedGameStats,
+  season: NormalizedTeamStats,
+  benchmarks: LeagueTeamBenchmarks,
+  shotMapComparison: ShotMapComparison | null | undefined
+) => {
+  const threeMedian = getLeagueMedian(benchmarks, season, 'three_rate');
+  if (threeMedian === null || (game.threeRate - threeMedian) * 100 < STRUCTURAL_THREE_RATE_PP) return false;
+  const rimHeavy = (shotMapComparison?.rimRateDelta ?? Number.NEGATIVE_INFINITY) >= STRUCTURAL_FT_RIM_RATE_PP;
+  return !rimHeavy;
+};
+
+/** Faultfegyelem: az ellenfél FTM rate-je a liga medián felett (a védekezési faktor sávja). */
+const FOUL_DISCIPLINE_PREFIX = 'Faultfegyelem';
+
+const describeFoulDiscipline = (
+  defense: PostGameReport['context']['defense'],
+  opponent: NormalizedGameStats | null
+) => {
+  if (!defense || !opponent || typeof defense.opponentFtRate !== 'number' || typeof defense.leagueFtRate !== 'number') return null;
+  const gap = round(defense.opponentFtRate - defense.leagueFtRate, 1);
+  if (gap < DEFENSE_FT_BAND) return null;
+  return `${FOUL_DISCIPLINE_PREFIX} – az ellenfél ${opponent.fta} büntetőt dobott ${opponent.fga} mezőnykísérletre (FTM rate ${fixed1(defense.opponentFtRate)}% vs liga medián ${fixed1(defense.leagueFtRate)}%, ${signedPp(gap)})`;
 };
 
 const buildStrengths = (
@@ -1585,8 +1738,10 @@ const buildProblems = (
     const interior = describeInteriorShift(twoRateDelta, shotMapComparison, 'down');
     if (interior) problems.push(interior);
     if (orebRateDelta <= -6) problems.push(`Második esély volumen visszaesett (${orebRateDelta} százalékpont OREB)`);
-    if (ftRateDelta <= -6) problems.push(`Alacsony FTM rate (${ftRateDelta} százalékpont)`);
   }
+
+  const rimFinishing = describeRimFinishing(shotMapComparison);
+  if (rimFinishing) problems.push(rimFinishing);
 
   const pushLeague = (line: string | null) => {
     if (line) problems.push(line);
@@ -1595,13 +1750,19 @@ const buildProblems = (
   pushLeague(leagueLine(benchmarks, season, 'efg', game.efg, 1, 'below', 'Dobáshatékonyság a liga alatt', 'eFG'));
   pushLeague(leagueLine(benchmarks, season, 'three_pct', game.threePct, 1, 'below', 'Periméter-hatékonyság a liga alatt', '3P%'));
   pushLeague(leagueLine(benchmarks, season, 'oreb_rate', game.orebRate, 100, 'below', 'OREB volumen a liga alatt', 'OREB%'));
-  pushLeague(leagueLine(benchmarks, season, 'ft_rate', game.ftRate, 100, 'below', 'FTM rate a liga alatt', 'FTM rate'));
+
+  // Alacsony FTM rate: magas triplaaránynál (sok gyűrűtámadás nélkül) a
+  // dobásmix következménye – nem probléma, és nem indít „kontaktkeresés” fókuszt.
+  if (!isStructurallyLowFt(game, season, benchmarks, shotMapComparison)) {
+    if (baseline.kind === 'season' && ftRateDelta <= -6) problems.push(`Alacsony FTM rate (${ftRateDelta} százalékpont)`);
+    pushLeague(leagueLine(benchmarks, season, 'ft_rate', game.ftRate, 100, 'below', 'FTM rate a liga alatt', 'FTM rate'));
+  }
 
   if (shotMapComparison) {
     if (shotMapComparison.midRateDelta >= 6 && shotMapComparison.shotQualityDelta <= -4) {
       problems.push('Dobástérkép: túl magas középtávoli arány, romló dobáshely-mix');
     }
-    if (shotMapComparison.rimRateDelta <= -5 && shotMapComparison.rimPctDelta <= -4) {
+    if (!rimFinishing && shotMapComparison.rimRateDelta <= -5 && shotMapComparison.rimPctDelta <= -4) {
       problems.push('Dobástérkép: gyengült gyűrűtámadás és festékbeli befejezés');
     }
     if (shotMapComparison.threeRateDelta >= 6 && shotMapComparison.threePctDelta <= -5) {
@@ -1618,12 +1779,16 @@ const buildNextFocus = (
   problems: string[],
   strengths: string[],
   benchmarks: LeagueTeamBenchmarks,
-  baseline: PostgameBaseline
+  baseline: PostgameBaseline,
+  shotMapComparison?: ShotMapComparison | null,
+  defense?: PostGameReport['context']['defense']
 ) => {
   const focus: string[] = [];
 
   const topicKey = (message: string) => {
     const lower = message.toLowerCase();
+    if (lower.startsWith('faultfegyelem')) return 'foul';
+    if (lower.includes('gyűrű')) return 'rim';
     if (lower.includes('ftm rate') || lower.includes('ft rate') || lower.includes('büntető')) return 'ft';
     if (lower.includes('to-rate') || lower.includes('to ') || lower.includes('turnover') || lower.includes('labda')) return 'to';
     if (lower.includes('oreb') || lower.includes('második esély') || lower.includes('lepattanó')) return 'oreb';
@@ -1636,8 +1801,11 @@ const buildNextFocus = (
 
   const topicPriority = (message: string) => {
     switch (topicKey(message)) {
+      case 'foul':
       case 'ft':
         return 1;
+      case 'rim':
+        return 3;
       case 'to':
         return 2;
       case 'shooting':
@@ -1703,6 +1871,9 @@ const buildNextFocus = (
    * referenciához képest leggyengébb mutató javítása, ennek hiányában a
    * legerősebb megtartása – számokkal, generikus szöveg helyett.
    */
+  // Magas triplaaránynál (sok gyűrűtámadás nélkül) az alacsony FTM rate nem kontaktkeresési gond.
+  const ftIsStructural = isStructurallyLowFt(game, season, benchmarks, shotMapComparison);
+
   const buildFallbackFocus = () => {
     const referenceFor = (stat: string, seasonValue: number) =>
       baseline.comparable ? seasonValue : getLeagueMedian(benchmarks, season, stat);
@@ -1714,6 +1885,7 @@ const buildNextFocus = (
       { stat: 'assist_rate', label: 'Assist-rate', game: game.assistRate, ref: referenceFor('assist_rate', season.assistRate), multiplier: 100, direction: 'higher' as const, scale: 5, how: 'short roll és skip-pass visszahozása' },
     ]
       .filter((item): item is typeof item & { ref: number } => item.ref !== null && Number.isFinite(item.ref) && item.ref > 0)
+      .filter(item => !(item.stat === 'ft_rate' && ftIsStructural))
       .map(item => {
         const delta = (item.game - item.ref) * item.multiplier;
         return { ...item, score: (item.direction === 'higher' ? delta : -delta) / item.scale };
@@ -1734,6 +1906,35 @@ const buildNextFocus = (
     const strongest = candidates[candidates.length - 1];
     return `${strongest.label} szintjének megtartása: ${round(strongest.game * strongest.multiplier, 1).toFixed(1)}% (referencia ${round(strongest.ref * strongest.multiplier, 1).toFixed(1)}%) – minden fő mutató a referencia szintjén vagy felette.`;
   };
+
+  const opponentFt = defense?.opponentFtRate;
+  const leagueFt = defense?.leagueFtRate;
+  if (typeof opponentFt === 'number' && typeof leagueFt === 'number' && round(opponentFt - leagueFt, 1) >= DEFENSE_FT_BAND) {
+    const goalStep = GOAL_MAX_STEP_PP.ft_rate ?? Number.POSITIVE_INFINITY;
+    const capped = opponentFt - leagueFt > goalStep;
+    const target = capped ? round(opponentFt - goalStep, 1) : leagueFt;
+    addFocus(
+      formatFocusPlan(
+        FOUL_DISCIPLINE_PREFIX,
+        `ellenfél FTM rate ${fixed1(opponentFt)}% → ${fixed1(target)}%${capped ? ` (liga medián ${fixed1(leagueFt)}%)` : ''}`,
+        'függőleges védekezés és kéz fel a dobáskísérletnél, kevesebb reach-in és késői segítő fault'
+      )
+    );
+  }
+
+  const rimFinishing = describeRimFinishing(shotMapComparison);
+  if (rimFinishing && shotMapComparison?.rimPct !== undefined && shotMapComparison.seasonRimPct !== undefined) {
+    const { rimPct, seasonRimPct } = shotMapComparison;
+    const capped = seasonRimPct - rimPct > RIM_GOAL_MAX_STEP_PP;
+    const target = capped ? round(rimPct + RIM_GOAL_MAX_STEP_PP, 1) : seasonRimPct;
+    addFocus(
+      formatFocusPlan(
+        'Befejezés a gyűrűnél',
+        `gyűrű FG% ${fixed1(rimPct)}% → ${fixed1(target)}%${capped ? ` (szezon ${fixed1(seasonRimPct)}%)` : ''}`,
+        'kontakt után is befejezés, pumpfake és extra pass a festékben a forszírozott gyűrűdobás helyett'
+      )
+    );
+  }
 
   if (hasItemStartingWith(problems, 'Sok labdaeladás', 'TO arány a liga felett')) {
     addFocus(
@@ -1796,7 +1997,8 @@ const buildNextFocus = (
     );
   }
 
-  const hasFtProblem = problems.some(item => item.includes('FTM rate') || item.includes('büntető'));
+  const hasFtProblem = problems.some(item =>
+    (item.includes('FTM rate') || item.includes('büntető')) && !item.startsWith(FOUL_DISCIPLINE_PREFIX));
   if (hasFtProblem) {
     addFocus(
       formatFocusPlan(
@@ -1833,8 +2035,12 @@ const buildNextFocus = (
     .slice(0, 2);
 };
 
-/** Ennyi százalékpontnyi elmaradás alatt a mutató a referencia szintjén van. */
-const REFERENCE_GAP_MIN_PP = 1;
+/**
+ * Ennyi (kerekített) százalékpontnyi elmaradástól a mutató „kisebb elmaradás” –
+ * a Kulcs mutatók ▼ jelölésével összhangban bármilyen romlás látszik (korábban
+ * az 1 pp alatti romlást a „szintjén vagy felette” mondat elfedte).
+ */
+const REFERENCE_GAP_MIN_PP = 0.1;
 
 const buildOpponentProfileSection = (
   opponentName: string,
@@ -2037,61 +2243,103 @@ const buildOpponentProfileSection = (
   return lines;
 };
 
-/** A védekezés liga-szintje körüli sáv: DRtg (pont / 100 birtoklás), eFG és TO rate (pp). */
+/** A védekezés liga-szintje körüli sáv: DRtg (pont / 100 birtoklás), a négy faktor (pp). */
 const DEFENSE_DRTG_BAND = 4;
 const DEFENSE_EFG_BAND = 2.5;
 const DEFENSE_TO_BAND = 3;
+const DEFENSE_OREB_BAND = 4;
+const DEFENSE_FT_BAND = 3;
+
+type DefenseFactor = {
+  /** A faktor neve a mondatban (pl. „védőlepattanózás”). */
+  name: string;
+  /** A mért érték a liga mediánnal (pl. „ellenfél OREB% 13,8% vs liga medián 29,4%, −15,6 pp”). */
+  evidence: string;
+  /** A védekezés szempontjából: `Higher` = jobb a ligánál, `Lower` = gyengébb. */
+  verdict: 'Higher' | 'Lower' | 'Similar';
+};
 
 /**
- * A védekezés verdiktje a liga mediánhoz mérve, három jelzésből: DRtg (kapott
- * pont / 100 birtoklás), az ellenfél eFG%-a és a kikényszerített TO rate.
- * Mindegyik a saját sávján kívül „jobb” vagy „gyengébb” szavazat; a verdikt a
- * szavazatok előjele. Így az átlagos dobásengedés önmagában nem minősít
- * „ligaszintűnek” egy sok labdát szerző, kevés pontot engedő védekezést – és
- * fordítva. Hiányzó liga-referenciánál az adott jelzés nem szavaz.
+ * A védekezés négy faktora (Dean Oliver) a liga mediánhoz mérve: ellenfél eFG,
+ * kikényszerített TO rate, ellenfél OREB% (= a saját védőlepattanózás) és az
+ * ellenfél FTM rate-je (= faultfegyelem). Hiányzó liga-referenciánál a faktor
+ * kimarad.
+ */
+const buildDefenseFactors = (defense: NonNullable<PostGameReport['context']['defense']>): DefenseFactor[] => {
+  const signed = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
+  const factor = (
+    name: string,
+    label: string,
+    value: number | null | undefined,
+    league: number | null | undefined,
+    band: number,
+    lowerIsBetter: boolean
+  ): DefenseFactor | null => {
+    if (typeof value !== 'number' || typeof league !== 'number') return null;
+    const diff = round(value - league, 1);
+    return {
+      name,
+      evidence: `${label} ${value.toFixed(1)}% vs liga medián ${league.toFixed(1)}%, ${signed(diff)} pp`,
+      verdict: classifyDelta(lowerIsBetter ? -diff : diff, band),
+    };
+  };
+  return [
+    factor('dobásvédekezés', 'ellenfél eFG', defense.opponentEfg, defense.leagueEfg, DEFENSE_EFG_BAND, true),
+    factor('labdaszerzés', 'kikényszerített TO rate', defense.opponentTurnoverRate, defense.leagueTurnoverRate, DEFENSE_TO_BAND, false),
+    factor('védőlepattanózás', 'ellenfél OREB%', defense.opponentOrebRate, defense.leagueOrebRate, DEFENSE_OREB_BAND, true),
+    factor('faultfegyelem', 'ellenfél FTM rate', defense.opponentFtRate, defense.leagueFtRate, DEFENSE_FT_BAND, true),
+  ].filter((item): item is DefenseFactor => item !== null);
+};
+
+/**
+ * A védekezés verdiktje a liga mediánhoz mérve. Az eredményt a DRtg (kapott pont
+ * / 100 birtoklás) méri, ezért ha van liga-referenciája, ő dönt (±4 pont sáv); a
+ * négy faktor csak megmagyarázza. (A faktorok szavazása „ligaszintűnek”
+ * minősítette a 102,7-es DRtg-t, mert a védőlepattanózást nem nézte.) DRtg
+ * nélkül a négy faktor szavaz.
  */
 const classifyDefense = (defense: NonNullable<PostGameReport['context']['defense']>) => {
-  const votes = [
-    classifyDelta(defense.leagueEfg - defense.opponentEfg, DEFENSE_EFG_BAND),
-    typeof defense.opponentTurnoverRate === 'number' && typeof defense.leagueTurnoverRate === 'number'
-      ? classifyDelta(defense.opponentTurnoverRate - defense.leagueTurnoverRate, DEFENSE_TO_BAND)
-      : 'Similar',
-    typeof defense.drtg === 'number' && typeof defense.leagueDrtg === 'number'
-      ? classifyDelta(defense.leagueDrtg - defense.drtg, DEFENSE_DRTG_BAND)
-      : 'Similar',
-  ];
-  const total = votes.reduce((sum, vote) => sum + (vote === 'Higher' ? 1 : vote === 'Lower' ? -1 : 0), 0);
+  if (typeof defense.drtg === 'number' && typeof defense.leagueDrtg === 'number') {
+    return classifyDelta(defense.leagueDrtg - defense.drtg, DEFENSE_DRTG_BAND);
+  }
+  const total = buildDefenseFactors(defense)
+    .reduce((sum, item) => sum + (item.verdict === 'Higher' ? 1 : item.verdict === 'Lower' ? -1 : 0), 0);
   return total > 0 ? 'Higher' : total < 0 ? 'Lower' : 'Similar';
 };
 
 /**
- * Védekezési mondat a viszonyítási alappal együtt: a verdikt mellett a DRtg, az
- * ellenfél eFG%-a és a kikényszerített TO rate a liga mediánhoz mérve.
+ * Védekezési mondat: a verdikt a DRtg-vel, utána a faktorok – előbb ami a
+ * verdikt irányába hajtott, aztán ami ellene szólt, végül a medián körüliek.
  */
 const describeDefense = (context: PostGameReport['context']) => {
   const defense = context.defense;
   if (!defense) return 'nincs viszonyítási alap (ellenfél-adat vagy liga benchmark hiányzik)';
-  const signed = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
-  const evidence: string[] = [];
-  if (typeof defense.drtg === 'number' && typeof defense.leagueDrtg === 'number') {
-    evidence.push(`DRtg ${defense.drtg.toFixed(1)} vs liga medián ${defense.leagueDrtg.toFixed(1)}`);
-  } else if (typeof defense.drtg === 'number') {
-    evidence.push(`DRtg ${defense.drtg.toFixed(1)}`);
-  }
-  evidence.push(
-    `ellenfél eFG ${defense.opponentEfg.toFixed(1)}% vs liga medián ${defense.leagueEfg.toFixed(1)}%, ${signed(round(defense.opponentEfg - defense.leagueEfg, 1))} pp`
-  );
-  if (typeof defense.opponentTurnoverRate === 'number' && typeof defense.leagueTurnoverRate === 'number') {
-    evidence.push(
-      `kikényszerített TO rate ${defense.opponentTurnoverRate.toFixed(1)}% vs liga medián ${defense.leagueTurnoverRate.toFixed(1)}%, ${signed(round(defense.opponentTurnoverRate - defense.leagueTurnoverRate, 1))} pp`
-    );
-  }
   const verdict = context.defenseEfficiencyDelta === 'Higher'
     ? 'a liga szintjénél jobb volt'
     : context.defenseEfficiencyDelta === 'Lower'
       ? 'a liga szintjénél gyengébb volt'
       : 'ligaszintű volt';
-  return `${verdict} (${evidence.join('; ')})`;
+  const parts: string[] = [];
+  if (typeof defense.drtg === 'number' && typeof defense.leagueDrtg === 'number') {
+    parts.push(`DRtg ${defense.drtg.toFixed(1)} vs liga medián ${defense.leagueDrtg.toFixed(1)}`);
+  } else if (typeof defense.drtg === 'number') {
+    parts.push(`DRtg ${defense.drtg.toFixed(1)}`);
+  }
+  const factors = buildDefenseFactors(defense);
+  const describe = (items: DefenseFactor[]) => items.map(item => `${item.name} (${item.evidence})`).join(', ');
+  const better = factors.filter(item => item.verdict === 'Higher');
+  const worse = factors.filter(item => item.verdict === 'Lower');
+  const neutral = factors.filter(item => item.verdict === 'Similar');
+  const [drivers, against] = context.defenseEfficiencyDelta === 'Lower' ? [worse, better] : [better, worse];
+  if (context.defenseEfficiencyDelta === 'Similar') {
+    if (better.length > 0) parts.push(`jobb a ligánál: ${describe(better)}`);
+    if (worse.length > 0) parts.push(`gyengébb a ligánál: ${describe(worse)}`);
+  } else {
+    if (drivers.length > 0) parts.push(`${drivers.length > 1 ? 'mögötte' : 'elsősorban'}: ${describe(drivers)}`);
+    if (against.length > 0) parts.push(`ellene szólt: ${describe(against)}`);
+  }
+  if (neutral.length > 0) parts.push(`a liga medián körül: ${neutral.map(item => item.evidence).join(', ')}`);
+  return `${verdict} (${parts.join('; ')})`;
 };
 
 /**
@@ -2111,6 +2359,7 @@ const buildSummaryParts = (
   opponent: NormalizedGameStats | null,
   baseline: PostgameBaseline,
   ratings: PostgameRatings | null,
+  marginBreakdown: PostgameMarginBreakdown | null,
   preGame?: PreGameXFactorContext
 ): NonNullable<PostGameReport['summaryParts']> => {
   const refNoun = baseline.noun;
@@ -2184,6 +2433,7 @@ const buildSummaryParts = (
       ratingsLine,
       `• Margin: ${metrics.margin > 0 ? '+' : ''}${metrics.margin.toFixed(1)} (${marginLabel}).`,
       causeLine,
+      marginBreakdown ? describeMarginBreakdown(marginBreakdown) : '',
       sampleLine,
     ].filter(Boolean),
     opponentProfile,
@@ -2247,6 +2497,12 @@ export const composePostgameSummary = (report: PostGameReport, focus?: string[])
   if (playerImpact.underperformers.length > 0) {
     playerHighlightLines.push(`• Gyenge meccs: ${playerImpact.underperformers.map(name => formatPlayerContext(name, 'under')).join(', ')}.`);
   }
+  const onOffWarnings = report.lineupSummary?.onOffWarnings ?? [];
+  if (onOffWarnings.length > 0) {
+    playerHighlightLines.push(
+      `• On/off ellentmondás (Kosarstat lineup): ${onOffWarnings.join('; ')}. A címke a box score-ból jön; az egymeccses on/off a csapattársaktól is függ.`
+    );
+  }
 
   const focusList = focus ?? buildPostgameAutoFocus(report);
   const focusLines = focusList.length > 0
@@ -2261,6 +2517,7 @@ export const composePostgameSummary = (report: PostGameReport, focus?: string[])
 
   return [
     ...parts.overview,
+    report.lineupSummary?.starterSplit ?? '',
     decisiveText ? `• Kulcsmomentumok: ${decisiveText}.` : '',
     ...playerHighlightLines,
     ...parts.opponentProfile,
@@ -2498,6 +2755,50 @@ const buildRatings = (
   };
 };
 
+/** A pontkülönbség-bontás (lásd `PostgameMarginBreakdown`); ellenfél-adat nélkül `null`. */
+const buildMarginBreakdown = (
+  game: NormalizedGameStats,
+  opponent: NormalizedGameStats | null
+): PostgameMarginBreakdown | null => {
+  if (!opponent) return null;
+  const ownChances = game.fga + 0.44 * game.fta;
+  const opponentChances = opponent.fga + 0.44 * opponent.fta;
+  if (!(ownChances > 0) || !(opponentChances > 0)) return null;
+  const ownPpc = game.pointsFor / ownChances;
+  const opponentPpc = opponent.pointsFor / opponentChances;
+  const volume = round((ownChances - opponentChances) * opponentPpc, 1);
+  return {
+    ownChances: round(ownChances, 1),
+    opponentChances: round(opponentChances, 1),
+    ownPointsPerChance: round(ownPpc, 2),
+    opponentPointsPerChance: round(opponentPpc, 2),
+    volume,
+    // A kerekítés után is pontosan a pontkülönbséget adja ki.
+    efficiency: round(game.pointsFor - opponent.pointsFor - volume, 1),
+    ownOrebRate: toPct(game.orebRate, 1),
+    opponentOrebRate: toPct(opponent.orebRate, 1),
+    ownTurnovers: game.tov,
+    opponentTurnovers: opponent.tov,
+  };
+};
+
+/** Ekkora pontkülönbség-komponens (pont) már meccsdöntő: a mondat megnevezi. */
+const MARGIN_COMPONENT_DECISIVE_MIN = 8;
+
+/** „Mi döntötte el?” összefoglaló sor a pontkülönbség-bontásból. */
+export const describeMarginBreakdown = (breakdown: PostgameMarginBreakdown) => {
+  const signed = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
+  const source = `OREB% ${breakdown.ownOrebRate.toFixed(1)}% vs ${breakdown.opponentOrebRate.toFixed(1)}%, labdavesztés ${breakdown.ownTurnovers}–${breakdown.opponentTurnovers}`;
+  const volumeText = `volumen ${signed(breakdown.volume)} pont (${breakdown.ownChances.toFixed(1)} vs ${breakdown.opponentChances.toFixed(1)} pontot hozó befejezés; ${source})`;
+  const efficiencyText = `hatékonyság ${signed(breakdown.efficiency)} pont (${breakdown.ownPointsPerChance.toFixed(2)} vs ${breakdown.opponentPointsPerChance.toFixed(2)} pont / befejezés)`;
+  const leading = Math.abs(breakdown.volume) >= Math.abs(breakdown.efficiency) ? 'volume' : 'efficiency';
+  const leadingValue = leading === 'volume' ? breakdown.volume : breakdown.efficiency;
+  const verdict = Math.abs(leadingValue) >= MARGIN_COMPONENT_DECISIVE_MIN
+    ? ` Elsősorban a ${leading === 'volume' ? 'volumen' : 'hatékonyság'} döntött.`
+    : '';
+  return `• Mi döntötte el (becslés): ${volumeText}; ${efficiencyText}.${verdict}`;
+};
+
 /**
  * Mi hiányzik a dobástérképről a box score szerint: a 2P / 3P találatok és
  * kísérletek különbségéből. Csak tiszta hiánynál ad választ (minden különbség
@@ -2528,6 +2829,30 @@ const describeMissingShots = (summary: TeamShotMapSummary, game: NormalizedGameS
   };
 };
 
+/** Ennyi félrebesorolt hármastól a középtáv / tripla zóna-állítások nem megbízhatók. */
+export const MISCLASSIFIED_THREES_MIN = 2;
+
+/**
+ * Zóna-besorolási eltérés: ha a dobástérképen kevesebb a hárompontos és több a
+ * kétpontos kísérlet, mint a box score-ban, a különbségek kisebbike legalább
+ * ennyi hármas kétpontosként – a hárompontos vonal mögül, tehát feltehetően
+ * középtávként – rögzítve. A találatokra ugyanígy becsül.
+ */
+const describeZoneMisclassification = (summary: TeamShotMapSummary, game: NormalizedGameStats) => {
+  const mapThreeAttempts = summary.zones.corner3.attempts + summary.zones.aboveBreak3.attempts;
+  const mapThreeMade = summary.zones.corner3.made + summary.zones.aboveBreak3.made;
+  const mapTwoAttempts = summary.attempts - mapThreeAttempts;
+  const mapTwoMade = summary.made - mapThreeMade;
+  const attempts = Math.min(game.fga3 - mapThreeAttempts, mapTwoAttempts - game.fga2);
+  if (attempts <= 0) return null;
+  const made = Math.max(0, Math.min(game.fgm3 - mapThreeMade, mapTwoMade - game.fgm2, attempts));
+  return {
+    attempts,
+    made,
+    sentence: `Dobástérkép 3P-besorolás: legalább ${attempts} hárompontos kísérlet${made > 0 ? ` (ebből ${made} értékesített)` : ''} kétpontosként – feltehetően középtávként – került a térképre (3P a box score-ban ${game.fgm3}/${game.fga3}, a dobástérképen ${mapThreeMade}/${mapThreeAttempts}; 2P a box score-ban ${game.fgm2}/${game.fga2}, a dobástérképen ${mapTwoMade}/${mapTwoAttempts}).`,
+  };
+};
+
 /**
  * A dobástérkép dobásszámának egyeztetése a box score FGA-jával. Eltérésnél a
  * dobástérkép hiányos (pl. kimaradt események), így a zóna- és 3P-adatai
@@ -2536,19 +2861,26 @@ const describeMissingShots = (summary: TeamShotMapSummary, game: NormalizedGameS
  */
 const validateShotMap = (summary: TeamShotMapSummary | null, game: NormalizedGameStats) => {
   if (!summary || !(game.fga > 0)) {
-    return { notes: [] as string[], reliable: Boolean(summary), coverage: null as PostgameShotMapCoverage | null };
+    return { notes: [] as string[], reliable: Boolean(summary), coverage: null as PostgameShotMapCoverage | null, zonesDistorted: false };
   }
   const notes: string[] = [];
   const diff = summary.attempts - game.fga;
   const relative = Math.abs(diff) / game.fga;
   const missingDetail = describeMissingShots(summary, game);
+  const misclassified = describeZoneMisclassification(summary, game);
   const coverage: PostgameShotMapCoverage = {
     shotMapAttempts: summary.attempts,
     boxAttempts: game.fga,
     missing: game.fga - summary.attempts,
     ...(missingDetail ? { missingDetail: missingDetail.short } : {}),
+    ...(misclassified ? { misclassifiedThrees: misclassified.attempts, misclassifiedThreesMade: misclassified.made } : {}),
   };
   const detailSentence = missingDetail ? ` ${missingDetail.sentence}` : '';
+  const zonesDistorted = (misclassified?.attempts ?? 0) >= MISCLASSIFIED_THREES_MIN;
+  // Egyetlen félrebesorolt dobás nem ér külön megjegyzést (a `coverage` jelzi).
+  const misclassifiedNote = misclassified && zonesDistorted
+    ? `${misclassified.sentence} A középtáv és a tripla zónaadatai, valamint a dobáshely-mix index ezért torzak, a riport nem von le belőlük következtetést; a gyűrű és a festék zóna állításai érvényesek.`
+    : null;
   if (Math.abs(diff) >= 3 || relative >= 0.05) {
     notes.push(
       `Dobástérkép hiányos: ${summary.attempts} dobás a box score ${game.fga} mezőnykísérletével szemben (${diff > 0 ? '+' : ''}${diff}); a dobástérkép zóna- és 3P-adatai (3P% ${summary.threePct.toFixed(1)}%) csak tájékoztatók, a box score 3P% ${game.threePct.toFixed(1)}%.${detailSentence}`
@@ -2563,13 +2895,14 @@ const validateShotMap = (summary: TeamShotMapSummary | null, game: NormalizedGam
       );
     }
     const shotMapThreeAttempts = Math.round((summary.threeRate / 100) * summary.attempts);
-    if (Math.abs(shotMapThreeAttempts - game.fga3) >= 3) {
+    if (!misclassifiedNote && Math.abs(shotMapThreeAttempts - game.fga3) >= 3) {
       notes.push(
         `Dobástérkép 3P-besorolás eltér: ${shotMapThreeAttempts} tripla a box score ${game.fga3} hárompontos kísérletével szemben – a zónaadatok tájékoztatók.`
       );
     }
   }
-  return { notes, reliable: relative <= 0.1, coverage };
+  if (misclassifiedNote) notes.push(misclassifiedNote);
+  return { notes, reliable: relative <= 0.1, coverage, zonesDistorted };
 };
 
 const buildOpponentShooting = (opponent: NormalizedGameStats | null): PostgameOpponentShooting | null => {
@@ -2735,6 +3068,8 @@ export const analyzePostGameReport = (
   const leagueMedianEfg = getLeagueMedian(leagueBenchmarks, season, 'efg');
   const leagueMedianTo = getLeagueMedian(leagueBenchmarks, season, 'turnover_rate');
   const leagueMedianDrtg = getLeagueMedian(leagueBenchmarks, season, 'drtg');
+  const leagueMedianOreb = getLeagueMedian(leagueBenchmarks, season, 'oreb_rate');
+  const leagueMedianFt = getLeagueMedian(leagueBenchmarks, season, 'ft_rate');
   const ratings = buildRatings(game, season, baseline);
   const defenseContext: PostGameReport['context']['defense'] = opponent && leagueMedianEfg !== null
     ? {
@@ -2744,6 +3079,10 @@ export const analyzePostGameReport = (
         leagueTurnoverRate: leagueMedianTo !== null ? toPct(leagueMedianTo, 1) : null,
         drtg: ratings?.drtg ?? null,
         leagueDrtg: leagueMedianDrtg !== null ? round(leagueMedianDrtg, 1) : null,
+        opponentOrebRate: toPct(opponent.orebRate, 1),
+        leagueOrebRate: leagueMedianOreb !== null ? toPct(leagueMedianOreb, 1) : null,
+        opponentFtRate: toPct(opponent.ftRate, 1),
+        leagueFtRate: leagueMedianFt !== null ? toPct(leagueMedianFt, 1) : null,
       }
     : null;
   const defenseDelta = defenseContext ? classifyDefense(defenseContext) : 'Similar';
@@ -2759,7 +3098,12 @@ export const analyzePostGameReport = (
     ? buildShotMapComparison(gameShotSummary, seasonShotSummary)
     : null;
 
-  const decisiveResult = buildDecisiveFactors(game, opponent, season, baseline, leagueBenchmarks, shotMapComparison);
+  // Félrebesorolt hármasoknál a szabályok a középtáv / tripla zóna-deltákat és a
+  // dobáshely-mix indexet nem kapják meg; a riportban a valódi összevetés marad.
+  const ruleComparison = shotMapComparison && shotMapValidation.zonesDistorted
+    ? withoutPerimeterZones(shotMapComparison)
+    : shotMapComparison;
+  const decisiveResult = buildDecisiveFactors(game, opponent, season, baseline, leagueBenchmarks, ruleComparison);
   const decisive = { offense: decisiveResult.offense, defense: decisiveResult.defense };
   const decisiveAnnotations = {
     annotated: {
@@ -2769,15 +3113,19 @@ export const analyzePostGameReport = (
     meta: decisiveResult.meta,
   };
   const playerShotMapContext = shotMapContext?.gameShots?.length
-    ? buildPlayerShotMapContext(shotMapContext.gameShots)
+    ? buildPlayerShotMapContext(shotMapContext.gameShots, shotMapValidation.zonesDistorted)
     : undefined;
 
   const playerReport = buildPlayerPostGameReport(players, playerShotMapContext);
   const playerImpact = reconcilePlayerImpact(analyzePlayerImpact(players), playerReport);
-  const ownStrengths = buildStrengths(game, season, leagueBenchmarks, baseline, shotMapComparison);
-  const ownProblems = buildProblems(game, season, leagueBenchmarks, baseline, shotMapComparison);
-  // A fókusz-szabályok a saját (támadó) sorok szövegére illesztenek.
-  const nextFocus = buildNextFocus(game, season, ownProblems, ownStrengths, leagueBenchmarks, baseline);
+  const ownStrengths = buildStrengths(game, season, leagueBenchmarks, baseline, ruleComparison);
+  const ownProblems = buildProblems(game, season, leagueBenchmarks, baseline, ruleComparison);
+  // A fókusz-szabályok a saját (támadó) sorok szövegére illesztenek; a
+  // faultfegyelem a védekezési kontextusból jön.
+  const nextFocus = buildNextFocus(
+    game, season, ownProblems, ownStrengths, leagueBenchmarks, baseline, ruleComparison, defenseContext
+  );
+  const foulDiscipline = describeFoulDiscipline(defenseContext, opponent);
   // A védekezési döntő tényezők az erősségek / problémák közé is bekerülnek –
   // különben pl. a periméter-védekezés a fókuszban szerepel, a problémák közt nem.
   const defenseLines = (tone: 'positive' | 'negative') =>
@@ -2786,10 +3134,15 @@ export const analyzePostGameReport = (
       .slice(0, 2)
       .map(item => `${DEFENSE_LINE_PREFIX} ${item.label}`);
   const strengths = [...ownStrengths, ...defenseLines('positive')];
-  const problems = [...ownProblems, ...defenseLines('negative')];
+  const problems = [
+    ...ownProblems,
+    ...(foulDiscipline ? [`${DEFENSE_LINE_PREFIX} ${foulDiscipline}`] : []),
+    ...defenseLines('negative'),
+  ];
   const xFactorReflection = buildXFactorReflection(preGameContext, game, season, opponent, decisiveAnnotations.meta);
 
   const metricsSummary = buildPostgameMetrics(game, season, leagueBenchmarks);
+  const marginBreakdown = buildMarginBreakdown(game, opponent);
   const opponentShooting = buildOpponentShooting(opponent);
 
   const result: 'win' | 'loss' =
@@ -2826,6 +3179,7 @@ export const analyzePostGameReport = (
       ratings,
       opponent: opponentShooting,
       boxScore: { own: buildBoxScoreLine(game), opponent: opponent ? buildBoxScoreLine(opponent) : null },
+      marginBreakdown,
     },
     charts: metricsSummary.charts,
     shotMap: {
@@ -2861,6 +3215,7 @@ export const analyzePostGameReport = (
       opponent,
       baseline,
       ratings,
+      marginBreakdown,
       preGameContext
     ),
     summary: '',
@@ -3141,6 +3496,23 @@ const POINT_SOURCE_STRENGTH_PREFIX = 'Pontforrás-fölény';
 const POINT_SOURCE_PROBLEM_PREFIX = 'Pontforrás-hátrány';
 
 /**
+ * A második esély pontforrás-fölénye és a lepattanó-fölény sorai („Második
+ * esély: ORB% különbség”, „Támadólepattanózás erős”) ugyanarról a tényezőről
+ * szólnak: a lepattanó-bizonyíték a pontforrás-sorba olvad, külön sor nem marad.
+ */
+const foldSecondChanceIntoPointSource = (strengths: string[]) => {
+  const pointLine = strengths.find(item =>
+    item.startsWith(POINT_SOURCE_STRENGTH_PREFIX) && item.includes('második esélyből'));
+  if (!pointLine) return strengths;
+  const evidence = strengths.map(secondChanceEvidence).filter((item): item is string => item !== null);
+  if (evidence.length === 0) return strengths;
+  const folded = `${pointLine.replace(/\.$/, '')}; a második esély forrása: ${evidence.join('; ')}.`;
+  return strengths
+    .filter(item => secondChanceEvidence(item) === null)
+    .map(item => (item === pointLine ? folded : item));
+};
+
+/**
  * A Kosarstat eFG-különbség (saját vs. ellenfél) ugyanarról a mutatóról szól,
  * mint a riport saját eFG-sora (szezonhoz / ligához mérve) – egy sorba
  * kerülnek, hogy az eFG ne szerepeljen kétszer.
@@ -3415,6 +3787,45 @@ const mergeUniqueLines = (base: string[], extra: string[]) => {
   return out;
 };
 
+/** Egy játékos on/off adata a Kosarstat lineupból (pont-különbség, pályán / padon). */
+export type PostgameOnOffInput = {
+  player: string;
+  onSeconds: number;
+  onDiff: number;
+  offDiff: number;
+};
+
+/** On/off ellentmondás: legalább ennyi pályán töltött idő és ennyi ponttal rosszabb „on” az „off”-nál. */
+export const ON_OFF_CONFLICT_MIN_SECONDS = 600;
+export const ON_OFF_CONFLICT_MIN_GAP = 25;
+
+/**
+ * A box score alapú pozitív / vezető címke és az on/off ellentmondása: aki
+ * `mvp` / `engine` osztályú, „Hatékony szerepjátékos”, vagy a „Pozitív hatás” /
+ * „Kiugró teljesítmény” listán van, de amíg pályán volt, a csapat legalább
+ * `ON_OFF_CONFLICT_MIN_GAP` ponttal rosszabbul állt, mint nélküle. A címke nem
+ * változik (az egymeccses on/off zajos, a csapattársaktól is függ) – a
+ * figyelmeztetés a számokkal együtt jelenik meg.
+ */
+const describeOnOffConflicts = (report: PostGameReport, onOff: PostgameOnOffInput[]) => {
+  const listed = (list: string[], name: string) => list.some(entry => entry === name || entry.startsWith(`${name} (`));
+  const signed = (value: number) => `${value > 0 ? '+' : ''}${value}`;
+  const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}`;
+  return onOff
+    .filter(row => row.onSeconds >= ON_OFF_CONFLICT_MIN_SECONDS && row.offDiff - row.onDiff >= ON_OFF_CONFLICT_MIN_GAP)
+    .map(row => {
+      const player = report.playerReport.players.find(item => item.name === row.player);
+      if (!player) return null;
+      const positive = listed(report.playerImpact.positive, player.name);
+      const leading = player.impactClass === 'mvp' || player.impactClass === 'engine' ||
+        player.impactLabel === 'Hatékony szerepjátékos' || listed(report.playerImpact.overperformers, player.name);
+      if (!positive && !leading) return null;
+      const labels = [`„${player.impactLabel}”`, ...(positive ? ['„Pozitív hatás”'] : [])].join(', ');
+      return `${player.name} (${labels}): pályán ${signed(row.onDiff)} (${clock(row.onSeconds)}), nélküle ${signed(row.offDiff)}`;
+    })
+    .filter((line): line is string => line !== null);
+};
+
 /**
  * A kosarstat-kiegészítés ráfűzése az `analyzePostGameReport` riportjára.
  * `extraNotes`: a hívó import-állapot megjegyzései (a `dataNotes` elé kerülnek
@@ -3429,11 +3840,18 @@ export const mergeKosarstatPostgameContext = (
     lineupInsights?: PostGameReport['lineupInsights'];
     /** A hívó saját problémasorai (pl. a lineup-elemzés leggyengébb együttállása). */
     extraProblems?: string[];
+    /** „Kezdő ötös vs többi perc” sor a lineup-modellből (`describeStarterSplit`). */
+    starterSplit?: string | null;
+    /** Játékosonkénti on/off a lineup-modellből – a címke-ellentmondás ellenőrzéséhez. */
+    onOff?: PostgameOnOffInput[];
   } = {}
 ): PostGameReport => {
   const extraNotes = options.extraNotes ?? [];
   const lineupInsights = options.lineupInsights;
   const extraProblems = options.extraProblems ?? [];
+  const starterSplit = options.starterSplit ?? null;
+  const onOffWarnings = options.onOff ? describeOnOffConflicts(report, options.onOff) : [];
+  const lineupSummary = starterSplit || onOffWarnings.length > 0 ? { starterSplit, onOffWarnings } : undefined;
 
   // A pontforrás csak akkor kerül a riportba, ha az eseménylistából összeadott
   // pontszám mindkét oldalon egyezik a végeredménnyel (teljes az eseménylista).
@@ -3456,6 +3874,7 @@ export const mergeKosarstatPostgameContext = (
     extraNotes.length === 0 &&
     extraProblems.length === 0 &&
     !lineupInsights &&
+    !lineupSummary &&
     sources === null &&
     context.strengths.length === 0 &&
     context.problems.length === 0 &&
@@ -3493,6 +3912,17 @@ export const mergeKosarstatPostgameContext = (
     ['Dobáshatékonyság visszaesett', 'Dobáshatékonyság a liga alatt']
   );
 
+  const reconciled = reconcileSecondChance(
+    {
+      strengths: mergedStrengths,
+      problems: mergedProblems,
+      nextFocus: mergeUniqueLines(report.nextFocus, context.nextFocus),
+    },
+    validSources,
+    secondChanceDetail
+  );
+  const secondChanceLines = { ...reconciled, strengths: foldSecondChanceIntoPointSource(reconciled.strengths) };
+
   const merged: PostGameReport = {
     ...report,
     metrics: validSources
@@ -3517,16 +3947,9 @@ export const mergeKosarstatPostgameContext = (
     decisiveFactorMeta: [...newFactors, ...report.decisiveFactorMeta],
     // A riport saját lepattanó-erőssége („Támadólepattanózás erős”) is átesik
     // az ellentmondás-ellenőrzésen – itt már ismert a pontforrás érvényessége.
-    ...reconcileSecondChance(
-      {
-        strengths: mergedStrengths,
-        problems: mergedProblems,
-        nextFocus: mergeUniqueLines(report.nextFocus, context.nextFocus),
-      },
-      validSources,
-      secondChanceDetail
-    ),
+    ...secondChanceLines,
     lineupInsights,
+    lineupSummary,
   };
   // Az összefoglaló a kiegészített riportból és a megjelenített fókuszlistából
   // épül újra – különben az összefűzés előtti állapotot mutatná.
@@ -3605,6 +4028,8 @@ export const POSTGAME_AUTO_FOCUS_LIMIT = 3;
 
 const focusTopic = (text: string) => {
   const lower = text.toLowerCase();
+  if (lower.includes('faultfegyelem')) return 'ft';
+  if (lower.includes('gyűrű')) return 'rim';
   if (lower.includes('ft rate') || lower.includes('büntető')) return 'ft';
   if (lower.includes('to ') || lower.includes('turnover') || lower.includes('labdaeladás')) return 'to';
   if (lower.includes('oreb') || lower.includes('második esély') || lower.includes('lepattanó')) return 'oreb';
@@ -3616,6 +4041,7 @@ const focusTopicPriority = (text: string) => {
   switch (focusTopic(text)) {
     case 'to': return 1;
     case 'ft': return 2;
+    case 'rim': return 3;
     case 'perimeter': return 3;
     case 'oreb': return 4;
     default: return 9;
@@ -3641,9 +4067,13 @@ export const buildPostgameAutoFocus = (
   report.nextFocus.forEach(pushUniqueByTopic);
   (kosarstat?.nextFocus ?? []).forEach(pushUniqueByTopic);
 
-  // Fókusz csak javítandó pontból lesz, saját védekezési sikerből nem.
+  // Fókusz csak javítandó pontból lesz, saját védekezési sikerből nem. Ha a
+  // témára már van konkrét fókuszterv (pl. faultfegyelem a büntető-hátrányra),
+  // a tipp nem foglal külön helyet.
   const factorHint = buildOpponentLinkedBreakdown(report).find(row => row.kind !== 'control')?.detail;
-  if (factorHint) focus.unshift(`Ellenfél-specifikus fókusz: ${factorHint}.`);
+  if (factorHint && !focus.some(item => focusTopic(item) === focusTopic(factorHint))) {
+    focus.unshift(`Ellenfél-specifikus fókusz: ${factorHint}.`);
+  }
 
   if (report.problems.length > 0) pushUniqueByTopic(`Mérkőzés utáni javítás: ${report.problems[0]}.`);
   if (kosarstat && kosarstat.problems.length > 0) pushUniqueByTopic(`Kosarstat javítási pont: ${kosarstat.problems[0]}`);
