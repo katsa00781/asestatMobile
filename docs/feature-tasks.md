@@ -204,6 +204,25 @@ előkészítve."), nem általános hálózati hibaként.
       összefoglaló (`parsePostgameSummary`), box score 2P / 3P és számláló
       sorok, „Dobáshely-mix index” felirat; a többi pont a szinkronnal magától
       érvényesül (D-132, D-133, D-134)
+- [x] Post-game H19 (web `1d68a08` … `8f7f05a`, 9 pont; jegyzet:
+      `docs/mobile-sync/2026-10-18-postgame-riport-h19.md`): `@core` szinkron
+      (Impact-alapú „Kiugró teljesítmény”, DRtg-verdikt, gyűrű-befejezés és
+      faultfegyelem, 3P-besorolási megjegyzés, „Mi döntötte el?” sor, saroktripla
+      javítás); mobil kódváltozás nem kellett, az opcionális megjelenítések
+      nem készülnek (D-135)
+- [ ] Post-game H19, **webprojekt / adat**: az ASE–Honvéd (2026-10-17) meccs
+      `games.kosarstat_game_id`-je (`d8bfe38d-1202-4f37-848f-d9971282055e`) az
+      élő adatban 2026-10-18-án még `null`; a visszaírás (`20261017102114`)
+      nem érvényesült, vagy a webes nézet újra nullázta. Amíg `null`, a mobil
+      nem mutat Kosarstat-adatot a meccsen
+- [ ] Post-game H19: a webes és a mobil liga mediánok összevetése – a mobil
+      adatán az ASE–Sopron védekezési verdikt `Higher` (liga DRtg medián 111.0),
+      a jegyzet `Similar`-t vár (medián ≤ 110.2); az ASE–Honvéd triplaarány-
+      medián 41.5% (a web ≤ 41.2%-nál adhat más FTM-szabályt)
+- [ ] Eszközös próba (iOS + Android) a 2026-10-18-i átvezetésre (H19), az
+      ASE–Honvéd meccsen: Kiugró = Chandler, a „Mi döntötte el” és a
+      védekezési mondat tördelése, a hosszú „Dobástérkép 3P-besorolás”
+      megjegyzés a képernyő tetején, Kosarstat-blokk a link visszaírása után
 - [ ] Eszközös próba (iOS + Android) a 2026-10-11-i átvezetésre (H17 + H18),
       az ASE–Sopron meccsen: a négy összefoglaló-kártya tördelése, a
       „Rotációs hozzájárulás (rövid percben)” jelvény, a 11 soros box score,
@@ -267,6 +286,54 @@ Sablon:
 ```
 
 <!-- ÚJ BEJEGYZÉSEK IDE, LEGFELÜLRE -->
+
+## 2026-10-18 – Post-game H19: @core szinkron és ellenőrzés (web → mobil)
+
+**Mit:** A `docs/mobile-sync/2026-10-18-postgame-riport-h19.md` teendői. A
+`npm run sync:core` a `core/postgame-report.ts`-t frissítette (külön commit:
+`69f63cb`), a `tsc` elsőre hibátlan volt. Mobil kódváltozás nem kellett:
+- az új mezők mind opcionálisak, a mobil nem szűr szövegre, nem ír
+  `kosarstat_game_id`-t, és nincs saját zónabesorolása (a nyers `x`, `y`,
+  `shotSide` megy a `@core`-nak), így a saroktripla-javítás magától érvényesül;
+- a „Kiugró teljesítmény”, a védekezési mondat, a gyűrű- és faultfegyelem-sorok,
+  a „Mi döntötte el” sor és a 3P-besorolási megjegyzés a riportszövegből és a
+  `dataNotes`-ból jön;
+- a `lineupSummary` (8. pont) a mobilban üres.
+- **Nem készült** (D-135): a `context.defense` négy új mezője külön kártyán,
+  külön 3P-besorolási figyelmeztetés a dobástérkép-kártyán, „Mi döntötte el?”
+  kártya.
+
+**Fájlok:** `core/postgame-report.ts` (szinkron, `69f63cb`),
+`docs/mobile-sync/2026-10-18-postgame-riport-h19.md`, `docs/feature-tasks.md`
+**Tesztelve:**
+- `npx tsc --noEmit`, `npm run lint` hibátlan.
+- Scratchpad-harness (jiti + aliasok, anon kliens, csak olvasás) a valódi
+  `lib/team-season-stats` → `lib/postgame-data` → `lib/postgame-view` láncon,
+  élő adaton, ASE–Honvéd (2026-10-17) és ASE–Sopron (2026-10-10):
+  - Honvéd: Kiugró = Chandler, Limitált üres; DRtg 102.7, ellenfél OREB% 13.8,
+    FTM rate 32.2, verdikt `Higher`; `misclassifiedThrees` 2/2 és a
+    megjegyzés a `notes`-ban; gyűrű 12/28; 87.2 vs 69.6, 1.28 vs 1.16,
+    +20.6 / +10.4; sarok 4/9 (12.0%), szezon 11/27; a megjelenített fókusz
+    első eleme a „Faultfegyelem”, „kontaktkeresés” nincs a nézetben.
+  - Sopron: a Kiugró lista 4 nevet ad, a Limitált üres.
+  - A Honvéd-link memóriában beállított felülírásával a Kosarstat-blokk
+    hibátlan: 11 soros box score, pontforrások, egyetlen „második esély” sor.
+- Eszközön és szimulátoron nem néztem meg.
+
+**Nyitva maradt:**
+- **Az 1. pont adat-ellenőrzése nem teljesült:** az ASE sor
+  `kosarstat_game_id`-je az élő adatban még `null` (csak a Honvéd-perspektívájú
+  soron van meg a `20261017102114`). A mobil nem ír, a visszaírás a webes
+  oldal dolga – külön sor a „Web → mobil szinkron” szakaszban.
+- Két ellenőrző szám eltér a jegyzettől, mobil hiba nélkül (azonos `@core`,
+  más bemeneti állapot): a Sopron-meccs verdiktje `Higher` (a jegyzet
+  `Similar`), a Honvéd-meccs problémái között ott az „FTM rate a liga alatt”
+  sor (3PA-arány 46.2% vs liga medián 41.5%, 4.7 pp az 5 pp-es küszöb alatt).
+  A medián-összevetés külön sor.
+- Eszközös próba (iOS + Android).
+
+**Commit:** `core: @core szinkron – post-game H19 …` (`69f63cb`) és
+`docs: post-game H19 átvezetése – ellenőrzés, jegyzet és naplók`
 
 ## 2026-10-11 – A H17 és a H18 mobil-sync jegyzet lezárása
 
@@ -5897,3 +5964,29 @@ dobástérkép alatt, a `sampleNote` mintájára.
 **Ha újranyílik:** a lineup-elemzés előbb kerüljön `@core` modulba.
 **Visszavonható?** Igen, a döntés nem zár ki semmit: a mezők a szinkronnal a
 `core/`-ban vannak.
+
+## D-135 – H19: védekezés-értékpárok, 3P-besorolási figyelmeztetés és „Mi döntötte el?” kártya nem készül
+**Dátum:** 2026-10-18
+**Döntés:**
+1. A `context.defense` négy új mezője (ellenfél OREB% / FTM rate a liga
+   mediánnal) nem kap külön kártyát (a D-134 1. pontja szerint).
+2. A `coverage.misclassifiedThrees` miatt nem kerül külön figyelmeztető sor a
+   dobástérkép-kártyára.
+3. A `metrics.marginBreakdown` nem kap külön „Mi döntötte el?” kártyát.
+
+**Miért:** (1) A mobilban nincs védekezés-kártya, amit bővíteni lehetne, az új
+szekció makett nélkül készülne; a számok az összefoglaló „Hatékonyság”
+pontjában szerepelnek. (2) A `@core` ugyanezt a „Dobástérkép 3P-besorolás”
+megjegyzést a `dataNotes`-ba is beírja, és a mobil a `dataNotes`-t a képernyő
+tetején mutatja; a kártya feletti sor ráadásul a lefedettség-sorral
+(`coverageNote`) ütközne, ami már jelzi a hiányzó dobásokat. (3) A „Mi
+döntötte el (becslés)” sor számokkal benne van az összefoglaló „Mérkőzés
+összefoglalója” szakaszában.
+**Alternatíva:** (1) `StatList` négy sorral a dobástérkép mintájára; (2) a
+`coverageNote` kiegészítése egy mondattal; (3) két `StatTile` a volumen- és
+hatékonyság-bontással. Mindhárom új, makett nélküli UI-elem lenne – a
+`CLAUDE.md` szerint rákérdezés kell hozzá.
+**Ha újranyílik:** a mezők a `core/`-ban megvannak (`context.defense`,
+`shotMap.coverage.misclassifiedThrees`, `metrics.marginBreakdown`), a
+`MISCLASSIFIED_THREES_MIN` exportált konstans.
+**Visszavonható?** Igen, a döntés nem zár ki semmit.
